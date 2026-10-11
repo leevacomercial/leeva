@@ -43,9 +43,7 @@ export async function POST(req: Request) {
           : 'Não conseguimos localizar o endereço do seu restaurante. Confira a rua, o número e o bairro.';
       return json({ error: msg, code: pickup.reason }, pickup.reason === 'geocoder_unavailable' ? 503 : 400);
     }
-    const fleetMode = (
-      ['own', 'leeva', 'hybrid'].includes(b.fleetMode ?? '') ? b.fleetMode : 'own'
-    ) as 'own' | 'leeva' | 'hybrid';
+    const fleetMode = 'own' as const;
 
     const businessHours = sanitizeBusinessHours(b.businessHours);
     const expectedDailyOrders =
@@ -68,7 +66,7 @@ export async function POST(req: Request) {
       })
       .eq('id', ctx.restaurantId);
 
-    await ensureSubscription(db, ctx.restaurantId, b.planCode ?? 'start');
+    await ensureSubscription(db, ctx.restaurantId, b.planCode ?? undefined);
     if (b.planCode) await changePlan(db, ctx.restaurantId, b.planCode);
 
     return json({ ok: true });

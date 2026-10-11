@@ -1175,3 +1175,36 @@ Leeva não mexe em dinheiro de entrega.
 - ATENÇÃO: no banco faltavam 0048, 0049 e 0050 (o código de 05–06/10 já
   estava no ar sem elas → GPS não gravava desde então). Junto com a 0051,
   precisam ser aplicadas.
+
+## 11/10/2026 — só frota própria (fim da rede), escalas, despacho no mapa, admin de assinaturas
+
+O dono decidiu: nada de rede Leeva. O Leeva é ferramenta pra equipe PRÓPRIA do
+estabelecimento (modelo Foody Delivery, só que melhor) e cobra só mensalidade.
+
+- **Removido** (código; as tabelas ficam no banco como histórico): créditos e
+  compra de crédito via Asaas, margem por entrega, carteira/saque Pix do
+  motoboy, cadastro aberto "quero entregar", envio de documentos, aprovação de
+  motoboy pela plataforma, telas Créditos/Entregadores (painel), Carteira/
+  Documentos (PWA e app nativo), Novos motoboys/Repasses/Caixa/Financeiro de
+  margem (admin), webhook Asaas e cron de fechamento.
+- **Despacho**: só a equipe do próprio restaurante entra no sorteio.
+- **Escalas** (migration 0052, `shifts.ts`, tela /escalas): turnos por dia,
+  "repetir esta semana na próxima", trava opcional "despachar só pra quem está
+  de turno" (`logistics_config.shifts_enforced`). O motoboy vê "Minha escala"
+  no app (PWA já; app nativo no próximo APK).
+- **Ao vivo**: pedido buscando entregador ganha "Mandar pra…" (despacho manual
+  por cima do automático, lista quem está online ordenado por distância).
+- **Admin**: "Restaurantes" virou **Clientes** — situação da cobrança (em dia,
+  teste, inadimplente, vence em X dias), filtro "cobrar / atenção" e botões
+  marcar pago / inadimplente / estender teste / trocar plano / cancelar. A
+  cobrança em si é por fora (Pix/boleto).
+- **Bug corrigido**: trocar de plano (inclusive no cadastro) marcava a
+  assinatura como paga e encerrava o teste grátis. Agora só "marcar como pago"
+  ativa. Restaurante novo nasce no plano mensal.
+- **Migration 0053**: força `fleet_mode='own'` em todos, tira do ar os
+  motoboys da rede (active=false), zera valor por entrega dos planos e tira
+  start/pro/business da vitrine (se o mensal existir).
+- Precisa aplicar no Supabase, nesta ordem: 0048–0051 (se ainda não), 0052, 0053.
+- Scripts de integração de créditos/repasses/cadastro (test-asaas, fase4,
+  fase5, fase5c) foram apagados; os outros passaram a usar frota própria
+  (não foram rodados — precisam do banco real).

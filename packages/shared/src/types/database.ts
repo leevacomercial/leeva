@@ -1851,6 +1851,51 @@ export type Database = {
           },
         ]
       }
+      driver_shifts: {
+        Row: {
+          created_at: string
+          ends_at: string
+          id: string
+          motoboy_id: string
+          note: string | null
+          restaurant_id: string
+          starts_at: string
+        }
+        Insert: {
+          created_at?: string
+          ends_at: string
+          id?: string
+          motoboy_id: string
+          note?: string | null
+          restaurant_id: string
+          starts_at: string
+        }
+        Update: {
+          created_at?: string
+          ends_at?: string
+          id?: string
+          motoboy_id?: string
+          note?: string | null
+          restaurant_id?: string
+          starts_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_shifts_motoboy_id_fkey"
+            columns: ["motoboy_id"]
+            isOneToOne: false
+            referencedRelation: "motoboys"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_shifts_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       restaurant_driver_prefs: {
         Row: {
           created_at: string

@@ -5,9 +5,6 @@ import { usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 const I = {
-  home: (
-    <path d="M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5" />
-  ),
   orders: (
     <>
       <path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z" />
@@ -23,12 +20,6 @@ const I = {
   chart: (
     <>
       <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
-    </>
-  ),
-  ticket: (
-    <>
-      <path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2 2 2 0 0 0 0 4 2 2 0 0 1-2 2H6a2 2 0 0 1-2-2 2 2 0 0 0 0-4z" />
-      <path d="M14 6v12" strokeDasharray="1 3" />
     </>
   ),
   money: (
@@ -56,24 +47,15 @@ const I = {
       <path d="M8.5 17h7l2-7h2M6 10h5l3 7M13 6h3" />
     </>
   ),
-  heart: (
-    <path d="M12 20.5s-7.5-4.6-9.8-9C.7 8.1 2 4.5 5.6 3.8c2-.4 3.9.5 5 2.1 1.1-1.6 3-2.5 5-2.1 3.6.7 4.9 4.3 3.4 7.7-2.3 4.4-9.8 9-9.8 9z" />
+  calendar: (
+    <>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
+      <path d="M3.5 10h17M8 3v4M16 3v4" />
+    </>
   ),
 } as const;
 
 type IconKey = keyof typeof I;
-
-const NAV: { href: string; label: string; icon: IconKey }[] = [
-  { href: '/dashboard', label: 'Visão geral', icon: 'home' },
-  { href: '/pedidos', label: 'Pedidos', icon: 'orders' },
-  { href: '/mapa', label: 'Mapa', icon: 'map' },
-  { href: '/entregadores', label: 'Entregadores', icon: 'heart' },
-  { href: '/indicadores', label: 'Indicadores', icon: 'chart' },
-  { href: '/creditos', label: 'Créditos', icon: 'ticket' },
-  { href: '/financeiro', label: 'Financeiro', icon: 'money' },
-  { href: '/integracoes', label: 'Integrações', icon: 'plug' },
-  { href: '/configuracoes', label: 'Configurações', icon: 'gear' },
-];
 
 function Icon({ k }: { k: IconKey }): ReactNode {
   return (
@@ -83,28 +65,23 @@ function Icon({ k }: { k: IconKey }): ReactNode {
   );
 }
 
-/**
- * Menu do modelo atual (frota própria + mensalidade): o mapa ao vivo é a
- * tela principal. Sem Créditos (não há saldo pré-pago), sem Entregadores da
- * rede (a equipe é dele, fica em Motoboys) e sem Mapa separado (o mapa de
- * calor abre por Indicadores).
- */
-const NAV_OWN: { href: string; label: string; icon: IconKey }[] = [
+/** Menu: o mapa ao vivo é a tela principal; o mapa de calor abre por Indicadores. */
+const NAV: { href: string; label: string; icon: IconKey }[] = [
   { href: '/dashboard', label: 'Ao vivo', icon: 'map' },
   { href: '/pedidos', label: 'Pedidos', icon: 'orders' },
   { href: '/equipe', label: 'Motoboys', icon: 'scooter' },
+  { href: '/escalas', label: 'Escalas', icon: 'calendar' },
   { href: '/indicadores', label: 'Indicadores', icon: 'chart' },
   { href: '/financeiro', label: 'Acerto e financeiro', icon: 'money' },
   { href: '/integracoes', label: 'Integrações', icon: 'plug' },
   { href: '/configuracoes', label: 'Configurações', icon: 'gear' },
 ];
 
-export function Nav({ ownFleet }: { ownFleet: boolean }) {
+export function Nav() {
   const pathname = usePathname();
-  const links = ownFleet ? NAV_OWN : NAV;
   return (
     <>
-      {links.map((n) => (
+      {NAV.map((n) => (
         <Link
           key={n.href}
           href={n.href}

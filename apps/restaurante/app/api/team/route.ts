@@ -3,7 +3,7 @@ import { json, unauthorized, forbidden, badRequest, serverError, UUID } from '@/
 import { onlyDigits } from '@leeva/shared';
 
 /**
- * Gestão da FROTA PRÓPRIA do restaurante (own fleet). NUNCA toca na rede Leeva.
+ * Gestão da equipe de motoboys do restaurante (frota própria).
  * body: { full_name, phone } para criar | { id, active } para ativar/desativar
  */
 export async function POST(req: Request) {
@@ -11,15 +11,6 @@ export async function POST(req: Request) {
   if (!ctx) return unauthorized();
   try {
     const db = adminDb();
-    const { data: rst } = await db
-      .from('restaurants')
-      .select('fleet_mode')
-      .eq('id', ctx.restaurantId)
-      .maybeSingle();
-    if (rst?.fleet_mode !== 'own' && rst?.fleet_mode !== 'hybrid') {
-      return forbidden('Frota própria não está habilitada neste restaurante.');
-    }
-
     const b = (await req.json().catch(() => ({}))) as {
       id?: string;
       active?: boolean;

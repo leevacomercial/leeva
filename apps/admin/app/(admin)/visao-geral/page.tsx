@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { adminDb } from '@/lib/context';
 import { getAdminOverview, type AdminPeriod } from '@leeva/shared/services';
 import { StatCard, PeriodNav, money, num } from '../_lib/ui';
@@ -49,22 +50,18 @@ export default async function VisaoGeral({ searchParams }: { searchParams: Promi
       })()}
 
       <div className="card">
-        <div className="card-title">Receita</div>
+        <div className="card-title">Receita <Link href="/restaurantes?status=action" style={{ fontSize: 12, fontWeight: 400, marginLeft: 8 }}>ver quem cobrar →</Link></div>
         <div className="stat-row">
-          <StatCard label="MRR (assinaturas ativas)" value={money(o.mrr)} />
-          <StatCard label="Receita SaaS (período)" value={money(o.saasRevenue)} delta={o.deltas.saasRevenue} />
-          <StatCard label="Receita por entrega (período)" value={money(o.deliveryRevenue)} delta={o.deltas.deliveryRevenue} />
-          <StatCard label="Receita total (período)" value={money(o.totalRevenue)} delta={o.deltas.totalRevenue} />
-          <StatCard label="Custo com entregadores" value={money(o.driverCost)} />
-          <StatCard label="Margem logística" value={money(o.logisticsMargin)} delta={o.deltas.logisticsMargin} />
+          <StatCard label="Receita mensal (clientes em dia)" value={money(o.mrr)} />
+          <StatCard label="Mensalidades recebidas (período)" value={money(o.saasRevenue)} delta={o.deltas.saasRevenue} />
         </div>
       </div>
 
       <div className="card">
         <div className="card-title">Operação</div>
         <div className="stat-row">
-          <StatCard label="Restaurantes ativos" value={num(o.restaurantsActive)} />
-          <StatCard label="Restaurantes em trial" value={num(o.restaurantsTrial)} />
+          <StatCard label="Clientes em dia" value={num(o.restaurantsActive)} />
+          <StatCard label="Clientes em teste grátis" value={num(o.restaurantsTrial)} />
           <StatCard label="Entregas hoje" value={num(o.deliveriesToday)} delta={o.deltas.deliveries} />
           <StatCard label="Entregas nos últimos 7 dias" value={num(o.deliveries7d)} />
           <StatCard label="Motoboys cadastrados" value={num(o.motoboysRegistered)} />

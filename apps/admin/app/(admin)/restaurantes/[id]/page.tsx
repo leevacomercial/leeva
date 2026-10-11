@@ -1,11 +1,17 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { adminDb } from '@/lib/context';
-import { getRestaurantDetail, DEFAULT_LOGISTICS_CONFIG } from '@leeva/shared/services';
-import type { LogisticsConfig } from '@leeva/shared';
+import { getRestaurantDetail } from '@leeva/shared/services';
 import { money, num } from '../../_lib/ui';
-import { CreditAdjust } from './CreditAdjust';
-import { LogisticsFeesEditor } from './LogisticsFeesEditor';
+import { SubscriptionActions } from './SubscriptionActions';
+
+const STATUS_LABEL: Record<string, string> = {
+  active: 'Em dia',
+  trialing: 'Teste grátis',
+  past_due: 'Inadimplente',
+  canceled: 'Cancelado',
+};
+const DRIVER_STATUS: Record<string, string> = { available: 'livre', on_delivery: 'em entrega', offline: 'offline' };
 
 export const dynamic = 'force-dynamic';
 
@@ -16,10 +22,9 @@ export default async function RestaurantDetail({ params }: { params: Promise<{ i
 
   const r = d.restaurant;
   const sub = d.subscription as
-    | { status?: string; trial_ends_at?: string | null; current_period_end?: string; plans?: { name?: string; monthly_price?: number; per_delivery_price?: number } }
+    | { status?: string; trial_ends_at?: string | null; current_period_end?: string; plans?: { code?: string; name?: string; monthly_price?: number } }
     | null;
   const lc = (r.logistics_config ?? {}) as Record<string, unknown>;
-  const logistics: LogisticsConfig = { ...DEFAULT_LOGISTICS_CONFIG, ...((r.logistics_config as object) ?? {}) };
 
   return (
     <>
@@ -27,7 +32,7 @@ export default async function RestaurantDetail({ params }: { params: Promise<{ i
         <div>
           <h1>{r.name}</h1>
           <div className="sub">
-            <Link href="/restaurantes">← Restaurantes</Link>
+            <Link href="/restaurantes">← Clientes</Link>
           </div>
         </div>
       </div>
@@ -42,15 +47,13 @@ export default async function RestaurantDetail({ params }: { params: Promise<{ i
             <dd>{r.phone ?? '—'}</dd>
             <dt>Coordenadas</dt>
             <dd>{r.latitude != null ? `${r.latitude}, ${r.longitude}` : '—'}</dd>
-            <dt>Frota</dt>
-            <dd>{r.fleet_mode}</dd>
             <dt>Onboarding</dt>
             <dd>{r.onboarding_completed ? 'Concluído' : 'Pendente'}</dd>
             <dt>Cadastro</dt>
             <dd>{new Date(r.created_at).toLocaleString('pt-BR')}</dd>
             <dt>Volume esperado</dt>
             <dd>{r.expected_daily_orders != null ? `~${r.expected_daily_orders} pedidos/dia` : '— (não informado)'}</dd>
-            <dt>Equipe</dt>
+            <dt>Usuários do painel</dt>
             <dd>{d.team.map((u) => `${u.full_name ?? '—'} (${u.role})`).join(', ') || '—'}</dd>
           </dl>
         </div>
@@ -61,20 +64,31 @@ export default async function RestaurantDetail({ params }: { params: Promise<{ i
             <dl className="kv">
               <dt>Plano</dt>
               <dd>{sub.plans?.name ?? '—'}</dd>
-              <dt>Status</dt>
-              <dd>{sub.status}</dd>
+              <dt>Situação</dt>
+              <dd>{STATUS_LABEL[sub.status ?? ''] ?? sub.status}</dd>
               <dt>Mensalidade</dt>
               <dd>{money(sub.plans?.monthly_price)}</dd>
-              <dt>Por entrega</dt>
-              <dd>{money(sub.plans?.per_delivery_price)}</dd>
-              <dt>Trial até</dt>
-              <dd>{sub.trial_ends_at ? new Date(sub.trial_ends_at).toLocaleDateString('pt-BR') : '—'}</dd>
-              <dt>Período atual até</dt>
-              <dd>{sub.current_period_end ? new Date(sub.current_period_end).toLocaleDateString('pt-BR') : '—'}</dd>
+              {sub.status === 'trialing' ? (
+                <>
+                  <dt>Teste grátis até</dt>
+                  <dd>{sub.trial_ends_at ? new Date(sub.trial_ends_at).toLocaleDateString('pt-BR') : '—'}</dd>
+                </>
+              ) : (
+                <>
+                  <dt>Pago até</dt>
+                  <dd>{sub.current_period_end ? new Date(sub.current_period_end).toLocaleDateString('pt-BR') : '—'}</dd>
+                </>
+              )}
             </dl>
           ) : (
-            <p className="muted">Sem assinatura.</p>
+            <p className="muted">Sem assinatura ainda (é criada no primeiro acesso ao painel).</p>
           )}
+          <SubscriptionActions
+            restaurantId={id}
+            status={sub?.status ?? null}
+            planCode={sub?.plans?.code ?? null}
+            plans={d.plans.map((p) => ({ code: p.code, name: p.name, monthly_price: Number(p.monthly_price) }))}
+          />
         </div>
       </div>
 
@@ -83,52 +97,39 @@ export default async function RestaurantDetail({ params }: { params: Promise<{ i
         <div className="stat-row">
           <div className="stat"><div className="v">{num(d.usage30d.delivered)}</div><div className="l">Entregas concluídas</div></div>
           <div className="stat"><div className="v">{num(d.usage30d.ordersCreated)}</div><div className="l">Pedidos criados</div></div>
-          <div className="stat"><div className="v">{money(d.usage30d.logisticsRevenue)}</div><div className="l">Receita logística</div></div>
-          <div className="stat"><div className="v">{money(d.usage30d.driverCost)}</div><div className="l">Custo entregadores</div></div>
-          <div className="stat"><div className="v">{money(d.usage30d.logisticsMargin)}</div><div className="l">Margem logística</div></div>
+          <div className="stat"><div className="v">{money(d.usage30d.driverCost)}</div><div className="l">Pago aos motoboys (acerto deles)</div></div>
+          <div className="stat"><div className="v">{num(d.drivers.filter((m) => m.active).length)}</div><div className="l">Motoboys ativos na equipe</div></div>
         </div>
       </div>
 
       <div className="card">
-        <div className="card-title">Crédito</div>
-        <div style={{ fontSize: 24, fontWeight: 650, color: d.credits.balance < 20 ? 'var(--danger)' : undefined }}>
-          {money(d.credits.balance)}
-        </div>
-        <CreditAdjust restaurantId={id} />
-        {d.credits.history.length > 0 && (
-          <table className="tbl" style={{ marginTop: 10 }}>
-            <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th style={{ textAlign: 'right' }}>Valor</th><th style={{ textAlign: 'right' }}>Saldo</th></tr></thead>
+        <div className="card-title">Equipe de motoboys</div>
+        {d.drivers.length ? (
+          <table className="tbl">
+            <thead><tr><th>Nome</th><th>Telefone</th><th>Situação</th><th>App ativado</th><th style={{ textAlign: 'right' }}>Entregas</th></tr></thead>
             <tbody>
-              {d.credits.history.map((h, i) => (
-                <tr key={i}>
-                  <td>{new Date(h.created_at).toLocaleDateString('pt-BR')}</td>
-                  <td>{h.kind}</td>
-                  <td>{h.description}</td>
-                  <td style={{ textAlign: 'right' }}>{money(Number(h.amount))}</td>
-                  <td style={{ textAlign: 'right' }}>{money(Number(h.balance_after))}</td>
+              {d.drivers.map((m) => (
+                <tr key={m.id}>
+                  <td>{m.full_name}{!m.active && <span className="tag gray" style={{ marginLeft: 6 }}>desativado</span>}</td>
+                  <td>{m.phone}</td>
+                  <td>{DRIVER_STATUS[m.status] ?? m.status}</td>
+                  <td>{m.user_id ? 'sim' : 'não'}</td>
+                  <td style={{ textAlign: 'right' }}>{num(m.deliveries_completed)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+        ) : (
+          <p className="muted">Nenhum motoboy cadastrado ainda.</p>
         )}
       </div>
 
       <div className="grid-2">
         <div className="card">
-          <div className="card-title">Taxas do restaurante</div>
+          <div className="card-title">Configuração do restaurante</div>
           <p className="muted" style={{ fontSize: 12, marginTop: 0 }}>
-            Só o admin mexe aqui — o restaurante não vê mais esses campos editáveis na própria tela.
+            Só leitura — o próprio restaurante ajusta taxas, raio e despacho em Configurações.
           </p>
-          <LogisticsFeesEditor
-            restaurantId={id}
-            initial={{
-              customerFee: logistics.customer_fee,
-              minOrder: logistics.min_order,
-              freeDeliveryMinOrder: logistics.free_delivery_min_order,
-            }}
-          />
-
-          <div className="card-title" style={{ marginTop: 16 }}>Resto da configuração (operacional, o restaurante ajusta)</div>
           <dl className="kv">
             {Object.entries(lc).map(([k, v]) => (
               <div key={k} style={{ display: 'contents' }}>
@@ -139,7 +140,7 @@ export default async function RestaurantDetail({ params }: { params: Promise<{ i
           </dl>
           {d.payoutPolicy && (
             <>
-              <div className="card-title" style={{ marginTop: 12 }}>Política de remuneração ({d.payoutPolicy.name})</div>
+              <div className="card-title" style={{ marginTop: 12 }}>Quanto paga ao motoboy ({d.payoutPolicy.name})</div>
               <pre style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>{JSON.stringify(d.payoutPolicy.config, null, 2)}</pre>
             </>
           )}

@@ -2,8 +2,8 @@
  * DESPACHO AUTOMÁTICO — o coração da Fase 3.
  *
  * O restaurante NÃO escolhe motoboy. O Leeva:
- *   1. identifica candidatos elegíveis (frota própria + rede, conforme o
- *      fleet_mode do restaurante);
+ *   1. identifica candidatos elegíveis (a equipe própria do estabelecimento,
+ *      respeitando a escala quando a trava de turno está ligada);
  *   2. exclui offline / sem capacidade / fora do raio;
  *   3. pontua cada candidato (ETA à coleta, impacto na rota, carga,
  *      confiabilidade, histórico, avaliação) — pesos CONFIGURÁVEIS;
@@ -19,13 +19,13 @@ import type { LogisticsConfig } from '../types';
 import { haversineKm, minutesForKm, legEtaMin, isValidLatLng, type LatLng } from './geo';
 import { getRoutingService } from './routing';
 import { getPayoutPolicy, computeDriverPayout, computeGroupedStopPayout, computeLogisticsFinance, getPlanMargin, isOwnFleetMonthly } from './payout';
-import { adjustCredit } from './credits';
 import { isRestaurantOpen, type BusinessHours } from './business-hours';
 import { classifyOfferQuality } from './reputation';
 import { sendPushToMotoboy } from './push';
 import { planGroupForOrder, applyGroupPlan, dissolveGroup, type GroupPlan } from './grouping-dispatch';
 import { notifyForStatusChange } from './events';
 import { getDriverPrefSets } from './driver-prefs';
+import { onShiftMotoboyIds } from './shifts';
 
 type DB = SupabaseClient<Database>;
 
@@ -120,7 +120,7 @@ export async function scoreCandidatesForOrder(
 
   const { data: rst } = await db
     .from('restaurants')
-    .select('latitude, longitude, fleet_mode, logistics_config')
+    .select('latitude, longitude, logistics_config')
     .eq('id', order.restaurant_id)
     .maybeSingle();
 
@@ -129,7 +129,6 @@ export async function scoreCandidatesForOrder(
     ...DEFAULT_DISPATCH_WEIGHTS,
     ...(((rst?.logistics_config as { dispatch_weights?: Partial<DispatchWeights> })?.dispatch_weights) ?? {}),
   };
-  const fleetMode = rst?.fleet_mode ?? 'leeva';
 
   // --- BLOCO 3: despacho sincronizado com o horário estimado de pronto ---
   // Já pronto ou sem estimativa de preparo = despacha na hora (sem atraso).
@@ -147,9 +146,7 @@ export async function scoreCandidatesForOrder(
     ? { latitude: order.latitude as number, longitude: order.longitude as number }
     : null;
 
-  // --- pool de candidatos ---
-  const wantOwn = fleetMode === 'own' || fleetMode === 'hybrid';
-  const wantLeeva = fleetMode === 'leeva' || fleetMode === 'hybrid';
+  // --- pool de candidatos: só a equipe própria do estabelecimento ---
 
   // só motoboy APROVADO e com os termos vigentes aceitos entra no pool
   const { data: terms } = await db
@@ -162,7 +159,7 @@ export async function scoreCandidatesForOrder(
     .maybeSingle();
   const activeTermsVersion = terms?.version ?? 0;
 
-  let q = db
+  const q = db
     .from('motoboys')
     .select(
       'id, full_name, fleet, restaurant_id, status, active, blocked, current_latitude, current_longitude, location_updated_at, max_concurrent_deliveries, rating, deliveries_total, deliveries_completed, deliveries_late, avg_delay_min',
@@ -171,12 +168,9 @@ export async function scoreCandidatesForOrder(
     .eq('blocked', false)
     .eq('approval_status', 'approved')
     .gte('terms_accepted_version', activeTermsVersion)
+    .eq('restaurant_id', order.restaurant_id)
+    .eq('fleet', 'own')
     .limit(200);
-
-  const orParts: string[] = [];
-  if (wantOwn) orParts.push(`and(restaurant_id.eq.${order.restaurant_id},fleet.eq.own)`);
-  if (wantLeeva) orParts.push('fleet.eq.leeva');
-  if (orParts.length) q = q.or(orParts.join(','));
 
   const { data: motoboys } = await q;
 
@@ -185,6 +179,11 @@ export async function scoreCandidatesForOrder(
     db,
     order.restaurant_id,
   );
+
+  // Escalas (0052): com "despachar só pra quem está de turno" ligado, motoboy
+  // da frota própria fora da escala não recebe oferta.
+  const onShift: Set<string> | null =
+    cfg.shifts_enforced ? await onShiftMotoboyIds(db, order.restaurant_id) : null;
 
   // entregas ativas de cada motoboy
   const motoboyIds = (motoboys ?? []).map((m) => m.id);
@@ -221,6 +220,7 @@ export async function scoreCandidatesForOrder(
     const reasons: string[] = [];
     const blockers: string[] = [];
     if (m.status === 'offline') blockers.push('offline');
+    if (onShift && m.fleet === 'own' && !onShift.has(m.id)) blockers.push('fora da escala');
     if (effectiveLoad >= max) blockers.push(`no limite (${effectiveLoad}/${max})`);
 
     const here: LatLng | null = isValidLatLng(m.current_latitude, m.current_longitude)
@@ -899,27 +899,8 @@ async function applyRideAlongDiscount(db: DB, orderId: string, restaurantId: str
   const currentPayout = order?.driver_payout != null ? Number(order.driver_payout) : null;
   if (currentPayout == null || acceptedPayout >= currentPayout - 0.01) return; // não é desconto — nada a ajustar
 
-  // frota própria: o Leeva não cobra por entrega — só corrige o valor do motoboy
-  if (await isOwnFleetMonthly(db, restaurantId)) {
-    await db.from('orders').update({ driver_payout: acceptedPayout }).eq('id', orderId);
-    return;
-  }
-  const margin = round(await getPlanMargin(db, restaurantId));
-  const newTotal = round(acceptedPayout + margin);
-  const prevTotal = order?.customer_fee != null ? Number(order.customer_fee) : null;
-
-  await db.from('orders').update({ driver_payout: acceptedPayout, customer_fee: newTotal, leeva_fee: newTotal }).eq('id', orderId);
-
-  if (prevTotal != null) {
-    const delta = round(prevTotal - newTotal); // positivo = devolve ao restaurante
-    if (delta >= 0.01) {
-      try {
-        await adjustCredit(db, restaurantId, delta, `Corrida extra (motoboy já em rota) — pedido ${orderId.slice(0, 8)}`);
-      } catch {
-        /* ajuste de crédito nunca bloqueia o aceite */
-      }
-    }
-  }
+  // o Leeva não cobra por entrega — só corrige o valor que o motoboy recebe
+  await db.from('orders').update({ driver_payout: acceptedPayout }).eq('id', orderId);
 }
 
 /** Motoboy recusa. A oferta fecha; o loop tenta o próximo. */

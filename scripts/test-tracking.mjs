@@ -10,7 +10,6 @@ import {
   createOrderFromNormalized,
   ensureSubscription,
   changePlan,
-  addCredit,
   advanceOrderStatus,
   runDispatchTick,
   acceptOffer,
@@ -41,18 +40,15 @@ const cleanup = [];
 async function main() {
   const { data: r } = await db
     .from('restaurants')
-    .insert({ name: '[TRK] R', latitude: -7.115, longitude: -34.845, fleet_mode: 'leeva', onboarding_completed: true })
+    .insert({ name: '[TRK] R', latitude: -7.115, longitude: -34.845, fleet_mode: 'own', onboarding_completed: true })
     .select('id')
     .single();
   cleanup.push(() => db.from('restaurants').delete().eq('id', r.id));
-  cleanup.push(() => db.from('credit_ledger').delete().eq('restaurant_id', r.id));
-  cleanup.push(() => db.from('restaurant_credits').delete().eq('restaurant_id', r.id));
   cleanup.push(() => db.from('tracking_tokens').delete().eq('restaurant_id', r.id));
   cleanup.push(() => db.from('notifications').delete().eq('restaurant_id', r.id));
 
   await ensureSubscription(db, r.id, 'pro');
   await changePlan(db, r.id, 'pro');
-  await addCredit(db, r.id, 500, 'purchase', '[TRK] saldo');
   // desliga agrupamento p/ não interferir
   await db.from('payout_policies').insert({
     restaurant_id: r.id,
@@ -122,8 +118,8 @@ async function main() {
     const { data: d } = await db
       .from('motoboys')
       .insert({
-        restaurant_id: null,
-        fleet: 'leeva',
+        restaurant_id: r.id,
+        fleet: 'own',
         full_name: 'João Entregador Silva',
         phone: `trk${Math.random()}`.slice(0, 15),
         status: 'available',

@@ -16,7 +16,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     if (!(await orderBelongsTo(db, id, ctx.restaurantId))) return forbidden();
 
     const r = await callDriverForOrder(db, id, ctx.restaurantId);
-    if (!r.ok) return json({ error: r.error, code: r.code }, r.code === 'insufficient_credit' ? 402 : 400);
+    if (!r.ok) return json({ error: r.error, code: r.code }, 400);
     return json({ ok: true, cost: r.cost });
   } catch (e) {
     return serverError(e);

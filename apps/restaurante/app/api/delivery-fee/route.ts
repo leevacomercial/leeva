@@ -1,10 +1,10 @@
 import { getApiContext, adminDb } from '@/lib/context';
 import { json, unauthorized, serverError } from '@/lib/api';
-import { computeDeliveryCharge, getCreditBalance } from '@leeva/shared/services';
+import { computeDeliveryCharge } from '@leeva/shared/services';
 
 /**
  * Pré-visualização da taxa da entrega — o restaurante vê ANTES de criar
- * quanto vai custar (e o detalhe entregador + Leeva). Não grava nada.
+ * a distância, quanto o motoboy recebe e a taxa do cliente. Não grava nada.
  * GET /api/delivery-fee?latitude=..&longitude=..
  */
 export async function GET(req: Request) {
@@ -18,16 +18,8 @@ export async function GET(req: Request) {
   }
   try {
     const db = adminDb();
-    const [charge, credit] = await Promise.all([
-      computeDeliveryCharge(db, ctx.restaurantId, { latitude: lat, longitude: lng }),
-      getCreditBalance(db, ctx.restaurantId),
-    ]);
-    return json({
-      ok: true,
-      ...charge,
-      balance: credit.balance,
-      sufficient: credit.balance >= charge.total,
-    });
+    const charge = await computeDeliveryCharge(db, ctx.restaurantId, { latitude: lat, longitude: lng });
+    return json({ ok: true, ...charge });
   } catch (e) {
     return serverError(e);
   }

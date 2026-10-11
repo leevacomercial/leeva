@@ -1,4 +1,3 @@
-import { redirect } from 'next/navigation';
 import { requireRestaurantContext, adminDb } from '@/lib/context';
 import { MOTOBOY_STATUS_LABELS, formatDateTime } from '@leeva/shared';
 import TeamManager from './TeamManager';
@@ -9,8 +8,7 @@ export default async function EquipePage() {
   const ctx = await requireRestaurantContext();
   const db = adminDb();
 
-  const { data: rst } = await db.from('restaurants').select('fleet_mode, name').eq('id', ctx.restaurantId).maybeSingle();
-  if (rst?.fleet_mode !== 'own' && rst?.fleet_mode !== 'hybrid') redirect('/dashboard');
+  const { data: rst } = await db.from('restaurants').select('name').eq('id', ctx.restaurantId).maybeSingle();
 
   const { data: team } = await db
     .from('motoboys')

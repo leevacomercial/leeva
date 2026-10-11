@@ -3,9 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  FLEET_MODE_LABELS,
   formatCurrencyBRL,
-  type FleetMode,
   type LogisticsConfig,
 } from '@leeva/shared';
 import { defaultBusinessHours, type BusinessHours } from '@leeva/shared/services/business-hours';
@@ -29,7 +27,6 @@ export default function ConfigForm({
     whatsapp: string;
     latitude: number | null;
     longitude: number | null;
-    fleetMode: FleetMode;
     logistics: LogisticsConfig;
     businessHours: BusinessHours | null;
     payout: OwnPayout;
@@ -38,7 +35,6 @@ export default function ConfigForm({
   plans: Plan[];
 }) {
   const router = useRouter();
-  const [fleetMode, setFleetMode] = useState(initial.fleetMode);
   const [L, setL] = useState<LogisticsConfig>(initial.logistics);
   const [P, setP] = useState<OwnPayout>(initial.payout);
   const nP = (k: keyof OwnPayout, v: number) => setP((s) => ({ ...s, [k]: v }));
@@ -61,13 +57,12 @@ export default function ConfigForm({
     setMsg(null);
     try {
       const r = await apiPost<{ ok: boolean; warnings: string[] }>('/api/config', {
-        fleetMode,
         latitude: lat ? Number(lat) : undefined,
         longitude: lng ? Number(lng) : undefined,
         logistics: L,
         businessHours: hours,
         whatsapp: whatsapp.trim() || null,
-        ...(fleetMode === 'own' ? { payout: P } : {}),
+        payout: P,
       });
       setMsg({ ok: true, warnings: r.warnings });
       router.refresh();
@@ -170,20 +165,7 @@ export default function ConfigForm({
         />
       </div>
 
-      {/* modelo atual é só frota própria: a escolha fica só pra contas antigas da rede */}
-      {initial.fleetMode !== 'own' && (
-        <div className="card">
-          <div className="card-title">Frota</div>
-          {(Object.keys(FLEET_MODE_LABELS) as FleetMode[]).map((m) => (
-            <label key={m} style={{ display: 'block', padding: '4px 0' }}>
-              <input type="radio" checked={fleetMode === m} onChange={() => setFleetMode(m)} disabled={!isOwner} style={{ marginRight: 8 }} />
-              {FLEET_MODE_LABELS[m]}
-            </label>
-          ))}
-        </div>
-      )}
-
-      {fleetMode === 'own' && (() => {
+      {(() => {
         // simulação pra o dono enxergar o efeito: entrega de 5 km
         const km = 5;
         const clientFee = (L.customer_fee ?? 0) + Math.max(0, km - (L.customer_fee_included_km ?? 0)) * (L.customer_fee_per_extra_km ?? 0);

@@ -1,7 +1,8 @@
 /**
  * Billing SaaS — planos, assinatura, uso e fatura estimada.
  *
- * Modelo: mensalidade + valor por entrega concluída.
+ * Modelo: só mensalidade (frota própria). O valor por entrega dos planos
+ * antigos fica em 0 — a cobrança é manual, marcada pelo admin.
  * As regras de plano ficam em `plans.features` (jsonb), nunca espalhadas
  * pelo código.
  */
@@ -11,8 +12,11 @@ import type { PlanFeatures } from '../types';
 
 type DB = SupabaseClient<Database>;
 
-/** Garante que o restaurante tem uma assinatura; cria em trial no plano dado (ou 'start'). */
-export async function ensureSubscription(db: DB, restaurantId: string, planCode = 'start') {
+/** Plano padrão de quem chega: o mensal da frota própria. */
+export const DEFAULT_PLAN_CODE = 'mensal';
+
+/** Garante que o restaurante tem uma assinatura; cria em teste grátis no plano dado (ou no mensal). */
+export async function ensureSubscription(db: DB, restaurantId: string, planCode = DEFAULT_PLAN_CODE) {
   const { data: existing } = await db
     .from('subscriptions')
     .select('*, plans(*)')
@@ -20,7 +24,11 @@ export async function ensureSubscription(db: DB, restaurantId: string, planCode 
     .maybeSingle();
   if (existing) return existing;
 
-  const { data: plan } = await db.from('plans').select('*').eq('code', planCode).maybeSingle();
+  let { data: plan } = await db.from('plans').select('*').eq('code', planCode).maybeSingle();
+  if (!plan) {
+    // plano pedido não existe: cai no primeiro plano ativo (ordem do admin)
+    ({ data: plan } = await db.from('plans').select('*').eq('active', true).order('sort_order').limit(1).maybeSingle());
+  }
   if (!plan) throw new Error(`plano '${planCode}' não existe`);
 
   const now = new Date();
@@ -55,13 +63,18 @@ export async function ensureSubscription(db: DB, restaurantId: string, planCode 
 
 export type SubscriptionRow = NonNullable<Awaited<ReturnType<typeof ensureSubscription>>>;
 
-/** Troca o plano da assinatura. */
+/**
+ * Troca o plano da assinatura. NÃO mexe no status: trocar de plano não é
+ * pagar — quem está em teste continua em teste, quem está inadimplente
+ * continua inadimplente. Só "marcar como pago" (admin) ativa.
+ */
 export async function changePlan(db: DB, restaurantId: string, planCode: string) {
   const { data: plan } = await db.from('plans').select('id').eq('code', planCode).eq('active', true).maybeSingle();
   if (!plan) return { ok: false as const, error: 'plano inválido' };
+  await ensureSubscription(db, restaurantId, planCode);
   const { error } = await db
     .from('subscriptions')
-    .update({ plan_id: plan.id, status: 'active' })
+    .update({ plan_id: plan.id, updated_at: new Date().toISOString() })
     .eq('restaurant_id', restaurantId);
   if (error) return { ok: false as const, error: 'falha ao trocar de plano' };
   return { ok: true as const };
@@ -170,3 +183,104 @@ export async function getPlanFeatures(db: DB, restaurantId: string): Promise<Pla
 }
 
 const round = (n: number) => Math.round(n * 100) / 100;
+
+// ---------------------------------------------------------------------------
+// Gestão de assinatura pelo admin (cobrança é manual, por fora — Pix/boleto)
+// ---------------------------------------------------------------------------
+
+export type SubscriptionAction =
+  | { action: 'mark_paid' }
+  | { action: 'past_due' }
+  | { action: 'cancel' }
+  | { action: 'extend_trial'; days: number }
+  | { action: 'change_plan'; planCode: string };
+
+/** Soma meses mantendo o dia (31/01 + 1 mês = último dia de fevereiro). */
+export function addMonths(d: Date, months: number): Date {
+  const x = new Date(d);
+  const day = x.getUTCDate();
+  x.setUTCDate(1);
+  x.setUTCMonth(x.getUTCMonth() + months);
+  const last = new Date(Date.UTC(x.getUTCFullYear(), x.getUTCMonth() + 1, 0)).getUTCDate();
+  x.setUTCDate(Math.min(day, last));
+  return x;
+}
+
+/**
+ * Próximo período pago. Se a assinatura ainda está em dia (vence no futuro),
+ * o mês novo emenda no fim do atual; se já venceu (ou estava em teste),
+ * começa hoje.
+ */
+export function nextPaidPeriod(
+  current: { status: string; current_period_end: string | null },
+  now: Date = new Date(),
+): { start: Date; end: Date } {
+  const end = current.current_period_end ? new Date(current.current_period_end) : null;
+  const start = current.status === 'active' && end && end > now ? end : now;
+  return { start, end: addMonths(start, 1) };
+}
+
+export async function applySubscriptionAction(
+  db: DB,
+  restaurantId: string,
+  act: SubscriptionAction,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sub = await ensureSubscription(db, restaurantId);
+  const now = new Date();
+  const nowIso = now.toISOString();
+
+  switch (act.action) {
+    case 'mark_paid': {
+      const { start, end } = nextPaidPeriod(sub, now);
+      const plan = (sub as { plans?: { monthly_price?: number; name?: string } }).plans;
+      const { error } = await db
+        .from('subscriptions')
+        .update({
+          status: 'active',
+          current_period_start: start.toISOString(),
+          current_period_end: end.toISOString(),
+          trial_ends_at: null,
+          canceled_at: null,
+          updated_at: nowIso,
+        })
+        .eq('id', sub.id);
+      if (error) return { ok: false, error: error.message };
+      await db.from('billing_events').insert({
+        restaurant_id: restaurantId,
+        subscription_id: sub.id,
+        type: 'subscription_fee',
+        amount: Number(plan?.monthly_price ?? 0),
+        description: `Mensalidade paga — ${plan?.name ?? 'plano'} até ${end.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`,
+      });
+      return { ok: true };
+    }
+    case 'past_due': {
+      const { error } = await db.from('subscriptions').update({ status: 'past_due', updated_at: nowIso }).eq('id', sub.id);
+      return error ? { ok: false, error: error.message } : { ok: true };
+    }
+    case 'cancel': {
+      const { error } = await db
+        .from('subscriptions')
+        .update({ status: 'canceled', canceled_at: nowIso, updated_at: nowIso })
+        .eq('id', sub.id);
+      return error ? { ok: false, error: error.message } : { ok: true };
+    }
+    case 'extend_trial': {
+      const days = Math.round(act.days);
+      if (!Number.isFinite(days) || days < 1 || days > 60) return { ok: false, error: 'informe de 1 a 60 dias' };
+      const base = sub.trial_ends_at && new Date(sub.trial_ends_at) > now ? new Date(sub.trial_ends_at) : now;
+      const { error } = await db
+        .from('subscriptions')
+        .update({
+          status: 'trialing',
+          trial_ends_at: new Date(base.getTime() + days * 864e5).toISOString(),
+          canceled_at: null,
+          updated_at: nowIso,
+        })
+        .eq('id', sub.id);
+      return error ? { ok: false, error: error.message } : { ok: true };
+    }
+    case 'change_plan':
+      return changePlan(db, restaurantId, act.planCode);
+  }
+}

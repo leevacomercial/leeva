@@ -62,11 +62,11 @@ export function LoginScreen(): React.JSX.Element {
         </Pressable>
 
         <Button
-          label="Quero entregar pelo Leeva"
+          label="Primeiro acesso? Ativar conta"
           variant="outline"
-          onPress={() => void Linking.openURL(`${API_URL}/quero-entregar`)}
+          onPress={() => void Linking.openURL(`${API_URL}/ativar`)}
         />
-        <Text style={styles.hint}>O cadastro de novo entregador é feito pelo site (envio de documentos).</Text>
+        <Text style={styles.hint}>Quem cadastra você é o estabelecimento onde você trabalha. Use o convite que ele mandou no WhatsApp.</Text>
       </View>
     </ScreenContainer>
   );

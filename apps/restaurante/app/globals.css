@@ -387,6 +387,7 @@ table.data th:last-child, .tbl th:last-child { border-top-right-radius: var(--r-
 .ops-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 8px; cursor: pointer; color: inherit; font: inherit; }
 .ops-item:hover { background: var(--surface-2); }
 .ops-item.active { border-color: var(--brand); background: var(--surface-2); }
+.ops-dispatch { display: grid; gap: 6px; padding: 8px 8px 10px 26px; font-size: 13px; }
 .ops-item .dot { flex: none; }
 .ops-item-title { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ops-item-sub { display: block; font-size: var(--fs-label); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

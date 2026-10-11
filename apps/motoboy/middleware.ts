@@ -3,7 +3,7 @@ import { updateLeevaSession } from '@leeva/shared/middleware';
 
 export async function middleware(request: NextRequest) {
   return updateLeevaSession(request, {
-    protectedPaths: ['/status', '/entrega', '/historico', '/desempenho', '/pagamentos', '/realtime-test'],
+    protectedPaths: ['/status', '/entrega', '/historico', '/desempenho', '/realtime-test'],
     loginPath: '/login',
   });
 }

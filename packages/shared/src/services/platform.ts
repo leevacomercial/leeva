@@ -245,124 +245,7 @@ export async function getAdminOverview(db: DB, period: AdminPeriod = '30d'): Pro
 }
 
 // ===========================================================================
-// FINANCEIRO + UNIT ECONOMICS
-// ===========================================================================
-
-export type AdminFinance = {
-  period: AdminPeriod;
-  saasRevenue: number;
-  variableRevenue: number;
-  totalRevenue: number;
-  costs: { driverPayouts: number; external: number; total: number };
-  margin: number;
-  unitEconomics: {
-    restaurantsBilled: number;
-    deliveries: number;
-    revenuePerRestaurant: number | null;
-    revenuePerDelivery: number | null;
-    costPerDelivery: number | null;
-    marginPerDelivery: number | null;
-    marginPerRestaurant: number | null;
-    deliveriesPerRestaurant: number | null;
-    mrr: number;
-    churnRate: number | null;
-    ltv: number | null;
-    ltvNote?: string;
-  };
-};
-
-export async function getAdminFinance(
-  db: DB,
-  period: AdminPeriod = '30d',
-  externalCosts = 0,
-): Promise<AdminFinance> {
-  const { from, to, days } = ranges(period);
-
-  const { data: billing } = await db
-    .from('billing_events')
-    .select('type, amount, restaurant_id')
-    .gte('created_at', from)
-    .lt('created_at', to)
-    .limit(200000);
-  let saas = 0;
-  let variable = 0;
-  const billedRestaurants = new Set<string>();
-  for (const b of billing ?? []) {
-    const a = Number(b.amount ?? 0);
-    if (b.type === 'subscription_fee') saas += a;
-    else if (b.type === 'delivery_fee') variable += a;
-    if (b.restaurant_id) billedRestaurants.add(b.restaurant_id);
-  }
-
-  const { data: dels } = await db
-    .from('orders')
-    .select('driver_payout, restaurant_id')
-    .eq('status', 'delivered')
-    .gte('delivered_at', from)
-    .lt('delivered_at', to)
-    .limit(300000);
-  let driverPayouts = 0;
-  let deliveries = 0;
-  const activeRestaurants = new Set<string>();
-  for (const o of dels ?? []) {
-    if (o.driver_payout == null) continue;
-    driverPayouts += Number(o.driver_payout ?? 0);
-    deliveries++;
-    if (o.restaurant_id) activeRestaurants.add(o.restaurant_id);
-  }
-
-  const totalRevenue = round(saas + variable);
-  const costsTotal = round(driverPayouts + externalCosts);
-  const margin = round(totalRevenue - costsTotal);
-  const nRest = Math.max(billedRestaurants.size, activeRestaurants.size);
-
-  // churn / LTV — só com amostra mínima
-  const { count: canceledCount } = await db
-    .from('subscriptions')
-    .select('id', { count: 'exact', head: true })
-    .eq('status', 'canceled')
-    .gte('canceled_at', from);
-  const { count: totalSubs } = await db.from('subscriptions').select('id', { count: 'exact', head: true });
-  const { data: activeSubs } = await db
-    .from('subscriptions')
-    .select('plans(monthly_price)')
-    .eq('status', 'active')
-    .limit(5000);
-  const mrr = round((activeSubs ?? []).reduce((s, x) => s + Number((x as { plans?: { monthly_price?: number } }).plans?.monthly_price ?? 0), 0));
-
-  const enoughSample = (totalSubs ?? 0) >= 10;
-  const monthlyChurn = enoughSample && (totalSubs ?? 0) > 0 ? (canceledCount ?? 0) / (totalSubs ?? 1) / (days / 30) : null;
-  const ltv =
-    monthlyChurn && monthlyChurn > 0 && (activeSubs?.length ?? 0) > 0
-      ? round(mrr / (activeSubs!.length) / monthlyChurn)
-      : null;
-
-  return {
-    period,
-    saasRevenue: round(saas),
-    variableRevenue: round(variable),
-    totalRevenue,
-    costs: { driverPayouts: round(driverPayouts), external: round(externalCosts), total: costsTotal },
-    margin,
-    unitEconomics: {
-      restaurantsBilled: billedRestaurants.size,
-      deliveries,
-      revenuePerRestaurant: nRest ? round(totalRevenue / nRest) : null,
-      revenuePerDelivery: deliveries ? round(totalRevenue / deliveries) : null,
-      costPerDelivery: deliveries ? round(driverPayouts / deliveries) : null,
-      marginPerDelivery: deliveries ? round(margin / deliveries) : null,
-      marginPerRestaurant: nRest ? round(margin / nRest) : null,
-      deliveriesPerRestaurant: nRest ? round(deliveries / nRest, 1) : null,
-      mrr,
-      churnRate: monthlyChurn != null ? round(monthlyChurn * 100, 1) : null,
-      ltv,
-      ltvNote: enoughSample ? undefined : 'amostra insuficiente para LTV/churn confiáveis',
-    },
-  };
-}
-
-// ===========================================================================
-// RESTAURANTES
+// CLIENTES E ASSINATURAS
 // ===========================================================================
 
 export type AdminRestaurantRow = {
@@ -370,15 +253,17 @@ export type AdminRestaurantRow = {
   name: string;
   plan: string | null;
   status: string | null;
-  fleetMode: string;
   onboardingCompleted: boolean;
+  /** fim do período pago (ativo) ou do teste (trialing) */
+  dueAt: string | null;
+  monthlyPrice: number;
+  teamSize: number;
   deliveries30d: number;
   mrr: number;
   variable30d: number;
   createdAt: string;
   trialEndsAt: string | null;
   lastActivityAt: string | null;
-  creditBalance: number;
 };
 
 export async function listRestaurants(
@@ -387,7 +272,7 @@ export async function listRestaurants(
 ): Promise<AdminRestaurantRow[]> {
   const { data: rests } = await db
     .from('restaurants')
-    .select('id, name, created_at, fleet_mode, onboarding_completed')
+    .select('id, name, created_at, onboarding_completed')
     .order('created_at', { ascending: false })
     .limit(2000);
   if (!rests?.length) return [];
@@ -395,7 +280,7 @@ export async function listRestaurants(
   const ids = rests.map((r) => r.id);
   const { data: subs } = await db
     .from('subscriptions')
-    .select('restaurant_id, status, trial_ends_at, plans(code, name, monthly_price)')
+    .select('restaurant_id, status, trial_ends_at, current_period_end, plans(code, name, monthly_price)')
     .in('restaurant_id', ids);
   const subByRest = new Map((subs ?? []).map((s) => [s.restaurant_id, s]));
 
@@ -427,27 +312,35 @@ export async function listRestaurants(
       lastByRest.set(o.restaurant_id, o.delivered_at);
   }
 
-  const { data: creds } = await db.from('restaurant_credits').select('restaurant_id, balance').in('restaurant_id', ids);
-  const balByRest = new Map((creds ?? []).map((c) => [c.restaurant_id, Number(c.balance)]));
+  const { data: team } = await db
+    .from('motoboys')
+    .select('restaurant_id')
+    .in('restaurant_id', ids)
+    .eq('fleet', 'own')
+    .eq('active', true)
+    .limit(100000);
+  const teamByRest = new Map<string, number>();
+  for (const m of team ?? []) if (m.restaurant_id) teamByRest.set(m.restaurant_id, (teamByRest.get(m.restaurant_id) ?? 0) + 1);
 
   let rows: AdminRestaurantRow[] = rests.map((r) => {
     const sub = subByRest.get(r.id) as
-      | { status?: string; trial_ends_at?: string | null; plans?: { code?: string; name?: string; monthly_price?: number } }
+      | { status?: string; trial_ends_at?: string | null; current_period_end?: string | null; plans?: { code?: string; name?: string; monthly_price?: number } }
       | undefined;
     return {
       id: r.id,
       name: r.name,
       plan: sub?.plans?.name ?? null,
       status: sub?.status ?? null,
-      fleetMode: r.fleet_mode,
       onboardingCompleted: !!r.onboarding_completed,
+      dueAt: sub?.status === 'trialing' ? (sub?.trial_ends_at ?? null) : (sub?.current_period_end ?? null),
+      monthlyPrice: round(Number(sub?.plans?.monthly_price ?? 0)),
+      teamSize: teamByRest.get(r.id) ?? 0,
       deliveries30d: delByRest.get(r.id) ?? 0,
       mrr: sub?.status === 'active' ? round(Number(sub?.plans?.monthly_price ?? 0)) : 0,
       variable30d: round(varByRest.get(r.id) ?? 0),
       createdAt: r.created_at,
       trialEndsAt: sub?.trial_ends_at ?? null,
       lastActivityAt: lastByRest.get(r.id) ?? null,
-      creditBalance: balByRest.get(r.id) ?? 0,
     };
   });
 
@@ -482,20 +375,16 @@ export async function getRestaurantDetail(db: DB, restaurantId: string) {
   d30.setDate(d30.getDate() - 30);
   const { data: dels } = await db
     .from('orders')
-    .select('status, driver_payout, leeva_fee, logistics_margin, delivered_at, created_at')
+    .select('status, driver_payout, delivered_at, created_at')
     .eq('restaurant_id', restaurantId)
     .gte('created_at', d30.toISOString())
     .limit(50000);
   let delivered = 0;
   let cost = 0;
-  let revenue = 0;
-  let margin = 0;
   for (const o of dels ?? []) {
-    if (o.status === 'delivered' && o.driver_payout != null) {
+    if (o.status === 'delivered') {
       delivered++;
       cost += Number(o.driver_payout ?? 0);
-      revenue += Number(o.leeva_fee ?? 0);
-      margin += Number(o.logistics_margin ?? 0);
     }
   }
   const { data: recentBilling } = await db
@@ -505,17 +394,13 @@ export async function getRestaurantDetail(db: DB, restaurantId: string) {
     .order('created_at', { ascending: false })
     .limit(20);
 
-  const { data: credits } = await db
-    .from('restaurant_credits')
-    .select('balance, low_balance_threshold')
+  const { data: drivers } = await db
+    .from('motoboys')
+    .select('id, full_name, phone, status, active, user_id, deliveries_completed')
     .eq('restaurant_id', restaurantId)
-    .maybeSingle();
-  const { data: creditHistory } = await db
-    .from('credit_ledger')
-    .select('kind, amount, balance_after, description, created_at')
-    .eq('restaurant_id', restaurantId)
-    .order('created_at', { ascending: false })
-    .limit(15);
+    .eq('fleet', 'own')
+    .order('full_name');
+  const { data: plans } = await db.from('plans').select('code, name, monthly_price').eq('active', true).order('sort_order');
 
   return {
     restaurant: r,
@@ -523,12 +408,11 @@ export async function getRestaurantDetail(db: DB, restaurantId: string) {
     team: users ?? [],
     integrations: integrations ?? [],
     payoutPolicy: payout ?? null,
-    credits: { balance: Number(credits?.balance ?? 0), history: creditHistory ?? [] },
+    drivers: drivers ?? [],
+    plans: plans ?? [],
     usage30d: {
       delivered,
       driverCost: round(cost),
-      logisticsRevenue: round(revenue),
-      logisticsMargin: round(margin),
       ordersCreated: (dels ?? []).length,
     },
     recentBilling: recentBilling ?? [],
@@ -696,121 +580,4 @@ export async function getNetworkOperation(
     regionDemand,
     gaps,
   };
-}
-
-// ===========================================================================
-// CAIXA — separa, com clareza, o dinheiro de cada um.
-//
-// A conta (Asaas) é uma só, mas o saldo nela não é "do Leeva": é a soma de
-// três potes.
-//   1) crédito dos restaurantes ainda não usado  → é DELES (serviço a
-//      entregar ou devolver, nunca gasto pelo Leeva)
-//   2) ganhos dos motoboys ainda não sacados      → é DELES (dinheiro já
-//      devido, só esperando o pedido de saque)
-//   3) margem do Leeva já ganha (entregas concluídas) menos o que já foi
-//      sacado antes                              → só isso é seguro tirar
-//
-// Não depende de consultar o saldo real da Asaas: é só ledger — soma o que
-// entrou, o que já foi prometido/pago aos outros dois potes, e o resto é
-// margem. Sacar mais que isso significa mexer no dinheiro alheio.
-// ===========================================================================
-
-export type AdminTreasury = {
-  restaurantCreditLiability: number; // pote 1 — dos restaurantes
-  motoboyPendingLiability: number; // pote 2 — dos motoboys (ainda não sacado)
-  leevaMarginEarned: number; // margem acumulada de TODAS as entregas concluídas
-  leevaMarginWithdrawn: number; // já registrado como sacado (platform_withdrawals)
-  leevaAvailableToWithdraw: number; // = earned - withdrawn — o único número seguro pra tirar
-  restaurantsWithBalance: { id: string; name: string; balance: number }[];
-  motoboysWithPending: { id: string; name: string; pending: number }[];
-};
-
-export async function getAdminTreasury(db: DB): Promise<AdminTreasury> {
-  // pote 1 — crédito dos restaurantes
-  const { data: credits } = await db
-    .from('restaurant_credits')
-    .select('restaurant_id, balance, restaurants(name)')
-    .gt('balance', 0)
-    .limit(5000);
-  const restaurantCreditLiability = round((credits ?? []).reduce((s, c) => s + Number(c.balance), 0));
-  const restaurantsWithBalance = (credits ?? [])
-    .map((c) => ({
-      id: c.restaurant_id,
-      name: (c as { restaurants?: { name?: string } }).restaurants?.name ?? '—',
-      balance: round(Number(c.balance)),
-    }))
-    .sort((a, b) => b.balance - a.balance);
-
-  // pote 2 — ganhos do motoboy ainda não sacados (não fechados em lote +
-  // lotes fechados/em processamento mas ainda não pagos)
-  const [{ data: unbatched }, { data: openBatches }] = await Promise.all([
-    db.from('driver_earnings').select('motoboy_id, amount, motoboys(full_name)').is('batch_id', null).limit(20000),
-    db
-      .from('payout_batches')
-      .select('motoboy_id, amount, motoboys(full_name)')
-      .in('status', ['pending', 'processing'])
-      .limit(5000),
-  ]);
-  const pendingByMotoboy = new Map<string, { name: string; pending: number }>();
-  for (const e of unbatched ?? []) {
-    const cur = pendingByMotoboy.get(e.motoboy_id) ?? { name: (e as { motoboys?: { full_name?: string } }).motoboys?.full_name ?? '—', pending: 0 };
-    cur.pending = round(cur.pending + Number(e.amount));
-    pendingByMotoboy.set(e.motoboy_id, cur);
-  }
-  for (const b of openBatches ?? []) {
-    const cur = pendingByMotoboy.get(b.motoboy_id) ?? { name: (b as { motoboys?: { full_name?: string } }).motoboys?.full_name ?? '—', pending: 0 };
-    cur.pending = round(cur.pending + Number(b.amount));
-    pendingByMotoboy.set(b.motoboy_id, cur);
-  }
-  const motoboyPendingLiability = round([...pendingByMotoboy.values()].reduce((s, m) => s + m.pending, 0));
-  const motoboysWithPending = [...pendingByMotoboy.entries()]
-    .map(([id, v]) => ({ id, name: v.name, pending: v.pending }))
-    .sort((a, b) => b.pending - a.pending);
-
-  // pote 3 — margem do Leeva: só entregas CONCLUÍDAS contam como ganhas de
-  // verdade (canceladas tiveram o crédito estornado — nunca foram receita).
-  const { data: delivered } = await db.from('orders').select('logistics_margin').eq('status', 'delivered').limit(200000);
-  const leevaMarginEarned = round((delivered ?? []).reduce((s, o) => s + Number(o.logistics_margin ?? 0), 0));
-
-  const { data: withdrawals } = await db.from('platform_withdrawals').select('amount').limit(10000);
-  const leevaMarginWithdrawn = round((withdrawals ?? []).reduce((s, w) => s + Number(w.amount), 0));
-
-  return {
-    restaurantCreditLiability,
-    motoboyPendingLiability,
-    leevaMarginEarned,
-    leevaMarginWithdrawn,
-    leevaAvailableToWithdraw: round(leevaMarginEarned - leevaMarginWithdrawn),
-    restaurantsWithBalance,
-    motoboysWithPending,
-  };
-}
-
-export type PlatformWithdrawal = {
-  id: string;
-  amount: number;
-  description: string | null;
-  createdAt: string;
-};
-
-export async function listPlatformWithdrawals(db: DB, limit = 50): Promise<PlatformWithdrawal[]> {
-  const { data } = await db
-    .from('platform_withdrawals')
-    .select('id, amount, description, created_at')
-    .order('created_at', { ascending: false })
-    .limit(limit);
-  return (data ?? []).map((w) => ({ id: w.id, amount: Number(w.amount), description: w.description, createdAt: w.created_at }));
-}
-
-/** Registra que o Leeva sacou `amount` da própria margem (feito por fora, na Asaas). */
-export async function recordPlatformWithdrawal(
-  db: DB,
-  amount: number,
-  description: string,
-  createdBy?: string,
-): Promise<{ ok: boolean; error?: string }> {
-  if (!(amount > 0)) return { ok: false, error: 'valor inválido' };
-  const { error } = await db.from('platform_withdrawals').insert({ amount: round(amount), description, created_by: createdBy ?? null });
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
 }

@@ -7,14 +7,12 @@ export type AuthStackParamList = {
 export type MainTabParamList = {
   Inicio: undefined;
   Ganhos: undefined;
-  Carteira: undefined;
   Perfil: undefined;
 };
 
 export type AppStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   Entrega: undefined;
-  Documentos: undefined;
 };
 
 declare global {

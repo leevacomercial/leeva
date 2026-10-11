@@ -87,7 +87,7 @@ async function main() {
   // ---------------------------------------------------------------
   const { data: r } = await db
     .from('restaurants')
-    .insert({ name: '[F35] R', latitude: -7.115, longitude: -34.845, fleet_mode: 'leeva', onboarding_completed: true })
+    .insert({ name: '[F35] R', latitude: -7.115, longitude: -34.845, fleet_mode: 'own', onboarding_completed: true })
     .select('id')
     .single();
   cleanup.push(() => db.from('restaurants').delete().eq('id', r.id));
@@ -96,8 +96,8 @@ async function main() {
     const { data } = await db
       .from('motoboys')
       .insert({
-        restaurant_id: null,
-        fleet: 'leeva',
+        restaurant_id: r.id,
+        fleet: 'own',
         full_name: '[F35] D',
         phone: `f35${Math.random()}`.slice(0, 15),
         status: 'available',

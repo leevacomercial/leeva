@@ -17,10 +17,6 @@ type FeePreview = {
   ok: boolean;
   distanceKm?: number | null;
   driverPayout?: number;
-  margin?: number;
-  total?: number;
-  balance?: number;
-  sufficient?: boolean;
   ownFleet?: boolean;
   customerDeliveryFee?: number;
   error?: string;
@@ -67,7 +63,6 @@ export default function NewOrderDialog({ onClose, onCreated }: { onClose: () => 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [fee, setFee] = useState<FeePreview | null>(null);
-  const [showDetail, setShowDetail] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [pasting, setPasting] = useState(false);
   const [pasteMsg, setPasteMsg] = useState<string | null>(null);
@@ -305,8 +300,8 @@ export default function NewOrderDialog({ onClose, onCreated }: { onClose: () => 
           )}
 
           {/* pré-visualização da taxa */}
-          {/* frota própria: o Leeva não cobra por entrega — mostra só o que importa pro dono */}
-          {fee?.ok && fee.ownFleet && (
+          {/* o Leeva não cobra por entrega — mostra só o que importa pro dono */}
+          {fee?.ok && (
             <div className="op-alert info" style={{ marginBottom: 0, fontSize: 13 }}>
               {fee.distanceKm != null && <><b>{fee.distanceKm} km</b> · </>}
               seu motoboy recebe <b>{formatCurrencyBRL(fee.driverPayout ?? 0)}</b>
@@ -314,38 +309,6 @@ export default function NewOrderDialog({ onClose, onCreated }: { onClose: () => 
             </div>
           )}
 
-          {fee?.ok && !fee.ownFleet && fee.total != null && (
-            <div className="op-alert info" style={{ marginBottom: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>
-                Esta entrega vai custar {formatCurrencyBRL(fee.total)}
-                {fee.distanceKm != null && (
-                  <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}> · {fee.distanceKm} km</span>
-                )}
-              </div>
-              <button
-                type="button"
-                className="btn sm"
-                style={{ marginTop: 6 }}
-                onClick={() => setShowDetail((s) => !s)}
-              >
-                {showDetail ? 'ocultar detalhe' : 'ver detalhe'}
-              </button>
-              {showDetail && (
-                <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-                  Entregador: {formatCurrencyBRL(fee.driverPayout ?? 0)} (100% pela distância)<br />
-                  Leeva: {formatCurrencyBRL(fee.margin ?? 0)} (margem do seu plano)<br />
-                  <b>Total descontado do seu crédito: {formatCurrencyBRL(fee.total)}</b>
-                </div>
-              )}
-              {fee.balance != null && (
-                <div style={{ fontSize: 12, marginTop: 6, color: fee.sufficient ? 'var(--ok)' : 'var(--danger)' }}>
-                  {fee.sufficient
-                    ? `Seu saldo: ${formatCurrencyBRL(fee.balance)} — suficiente`
-                    : `Saldo insuficiente (${formatCurrencyBRL(fee.balance)}). Compre créditos antes de criar.`}
-                </div>
-              )}
-            </div>
-          )}
 
           <div style={{ display: 'flex', gap: 8 }}>
             <select className="input" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)} style={{ flex: 1 }}>
@@ -403,15 +366,12 @@ export default function NewOrderDialog({ onClose, onCreated }: { onClose: () => 
               busy ||
               !customerName.trim() ||
               !address.trim() ||
-              !addressReady ||
-              (fee?.ok === true && !fee.ownFleet && fee.sufficient === false)
+              !addressReady
             }
           >
             {busy
               ? 'Criando…'
-              : fee?.ok && !fee.ownFleet && fee.sufficient === false
-                ? 'Saldo insuficiente'
-                : !addressReady
+              : !addressReady
                   ? 'Localize o endereço primeiro'
                   : 'Criar e buscar entregador'}
           </button>

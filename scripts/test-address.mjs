@@ -21,7 +21,6 @@ import {
   createOrderFromNormalized,
   ensureSubscription,
   changePlan,
-  addCredit,
 } from '../packages/shared/src/services/index.ts';
 import { getOrderProvider } from '../packages/shared/src/integrations/index.ts';
 
@@ -71,16 +70,13 @@ async function main() {
 
   const { data: r } = await db
     .from('restaurants')
-    .insert({ name: '[ADDR] R', latitude: REST.latitude, longitude: REST.longitude, fleet_mode: 'leeva', onboarding_completed: true })
+    .insert({ name: '[ADDR] R', latitude: REST.latitude, longitude: REST.longitude, fleet_mode: 'own', onboarding_completed: true })
     .select('id')
     .single();
   cleanup.push(() => db.from('restaurants').delete().eq('id', r.id));
-  cleanup.push(() => db.from('credit_ledger').delete().eq('restaurant_id', r.id));
-  cleanup.push(() => db.from('restaurant_credits').delete().eq('restaurant_id', r.id));
   cleanup.push(() => db.from('orders').delete().eq('restaurant_id', r.id));
   await ensureSubscription(db, r.id, 'pro');
   await changePlan(db, r.id, 'pro');
-  await addCredit(db, r.id, 500, 'purchase', '[ADDR] saldo');
 
   const manual = getOrderProvider('manual');
   const mkNormalized = async (address, extra = {}) => {
@@ -139,7 +135,7 @@ async function main() {
     assert.ok(loc.ok);
     n.address.latitude = loc.latitude;
     n.address.longitude = loc.longitude;
-    const res = await createOrderFromNormalized(db, r.id, n, { skipCredit: true });
+    const res = await createOrderFromNormalized(db, r.id, n, {});
     assert.ok(res.ok, res.error);
     cleanup.push(() => db.from('orders').delete().eq('id', res.orderId));
     assert.equal(await orderCount(), before + 1);
@@ -194,7 +190,7 @@ async function main() {
       db,
       r.id,
       await mkNormalized('rua a confirmar'),
-      { requireConfirmation: true, skipCredit: true },
+      { requireConfirmation: true },
     );
     assert.ok(res.ok, res.error);
     cleanup.push(() => db.from('orders').delete().eq('id', res.orderId));

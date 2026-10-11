@@ -29,62 +29,11 @@ export function registerExpoPush(token: string): Promise<{ ok: boolean }> {
   return apiSend<{ ok: boolean }>('/api/push/expo', 'POST', { token });
 }
 
-/** Cadastra/troca a chave Pix do repasse. */
-export function setPixKey(key: string, type: string): Promise<{ ok: boolean }> {
-  return apiSend<{ ok: boolean }>('/api/pix', 'POST', { key, type });
-}
 
-export type DriverDocsStatus = {
-  personalDocUrl: string | null;
-  personalDocBackUrl: string | null;
-  vehicleDocUrl: string | null;
-  avatarUrl: string | null;
-};
+export type MyShift = { id: string; starts_at: string; ends_at: string; note: string | null; active: boolean };
 
-/** Estado atual dos documentos (CNH/RG frente e verso, CRLV, foto do rosto). */
-export function getDriverDocs(): Promise<DriverDocsStatus> {
-  return apiGet<DriverDocsStatus>('/api/documents');
-}
-
-/** Envia/substitui um documento. type: 'personal' | 'personal_back' | 'vehicle' | 'avatar'. */
-export function uploadDriverDocument(
-  type: 'personal' | 'personal_back' | 'vehicle' | 'avatar',
-  fileBase64: string,
-): Promise<{ ok: boolean; requiresReview: boolean } & DriverDocsStatus> {
-  return apiSend('/api/documents', 'POST', { type, fileBase64 });
-}
-
-export type RequestPayoutResult =
-  | { ok: true; amount: number; fee: number; netAmount: number; simulated: boolean }
-  | { ok: false; error: string; code?: string };
-
-/** Solicita o repasse do saldo disponível — por iniciativa do motoboy, 1x por dia. */
-export function requestPayout(amount?: number): Promise<RequestPayoutResult> {
-  return apiSend('/api/payouts/request', 'POST', amount != null ? { amount } : undefined);
-}
-
-export type PayoutHistoryEntry = {
-  id: string;
-  periodDate: string;
-  amount: number;
-  transferFee: number;
-  netAmount: number;
-  earningsCount: number;
-  status: string;
-  simulated: boolean;
-  paidAt: string | null;
-  error: string | null;
-};
-
-export type WalletInfo = {
-  pendingAmount: number;
-  pendingCount: number;
-  requestedToday: boolean;
-  transferFee: number;
-  history: PayoutHistoryEntry[];
-};
-
-/** Saldo + histórico de repasses — aba Carteira. */
-export function getWallet(): Promise<WalletInfo> {
-  return apiGet<WalletInfo>('/api/payouts/history');
+/** Próximos turnos da escala montada pelo estabelecimento (14 dias). */
+export async function getMyShifts(): Promise<MyShift[]> {
+  const r = await apiGet<{ shifts: MyShift[] }>('/api/shifts');
+  return r.shifts;
 }

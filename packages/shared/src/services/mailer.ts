@@ -65,16 +65,6 @@ export async function sendVerificationEmail(to: string, link: string): Promise<b
   );
 }
 
-/** Novo motoboy se cadastrou (self-service) — avisa o operador pra ir aprovar. */
-export async function sendNewDriverSignupEmail(to: string, fullName: string, city: string): Promise<boolean> {
-  return sendEmail(
-    to,
-    `[Leeva] Novo motoboy pra aprovar: ${fullName}`,
-    `<p>${escapeHtml(fullName)} (${escapeHtml(city)}) acabou de se cadastrar como entregador.</p>
-     <p><a href="${process.env.NEXT_PUBLIC_ADMIN_URL ?? 'https://leeva-admin.vercel.app'}/novos-motoboys">Ver e aprovar</a></p>`,
-  );
-}
-
 /** Alerta operacional (ex: motor de despacho parado) — manda pro e-mail do operador da plataforma. */
 export async function sendOpsAlertEmail(to: string, subject: string, message: string): Promise<boolean> {
   return sendEmail(
@@ -82,28 +72,6 @@ export async function sendOpsAlertEmail(to: string, subject: string, message: st
     `[Leeva] ${subject}`,
     `<p>${escapeHtml(message)}</p>
      <p style="color:#666;font-size:13px">Confira em /visao-geral no painel admin.</p>`,
-  );
-}
-
-/** Cadastro de motoboy aprovado — avisa que já pode ficar online. */
-export async function sendDriverApprovedEmail(to: string, fullName: string): Promise<void> {
-  await sendEmail(
-    to,
-    'Seu cadastro no Leeva foi aprovado',
-    `<p>Oi, ${escapeHtml(fullName)}!</p>
-     <p>Seu cadastro como entregador no Leeva foi aprovado. Você já pode abrir o app, ficar online e começar a receber ofertas de entrega.</p>`,
-  );
-}
-
-/** Cadastro de motoboy reprovado — explica o motivo. */
-export async function sendDriverRejectedEmail(to: string, fullName: string, reason: string): Promise<void> {
-  await sendEmail(
-    to,
-    'Sobre o seu cadastro no Leeva',
-    `<p>Oi, ${escapeHtml(fullName)}.</p>
-     <p>Não conseguimos aprovar seu cadastro como entregador no Leeva.</p>
-     <p><b>Motivo:</b> ${escapeHtml(reason)}</p>
-     <p>Se quiser, você pode corrigir os documentos e tentar de novo.</p>`,
   );
 }
 

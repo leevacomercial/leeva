@@ -13,24 +13,22 @@ const waLink = (phone: string | null) => {
 
 const STATUS: Record<string, string> = { offline: 'Offline', available: 'Disponível', on_delivery: 'Em entrega' };
 
-export default async function Entregadores({ searchParams }: { searchParams: Promise<{ fleet?: string; status?: string }> }) {
+export default async function Entregadores({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const sp = await searchParams;
-  const { rows, totals } = await listDrivers(adminDb(), {
-    fleet: sp.fleet === 'own' || sp.fleet === 'leeva' ? sp.fleet : undefined,
-    status: sp.status,
-  });
+  const db = adminDb();
+  const { rows, totals } = await listDrivers(db, { fleet: 'own', status: sp.status });
+  const restIds = [...new Set(rows.map((m) => m.restaurantId).filter((x): x is string => !!x))];
+  const { data: rests } = restIds.length
+    ? await db.from('restaurants').select('id, name').in('id', restIds)
+    : { data: [] as { id: string; name: string }[] };
+  const restName = new Map((rests ?? []).map((r) => [r.id, r.name]));
 
   return (
     <>
       <div className="page-head">
         <div>
-          <h1>Entregadores</h1>
-          <div className="sub">Rede Leeva + frotas próprias</div>
-        </div>
-        <div className="seg">
-          <Link href="/entregadores" className={`seg-btn ${!sp.fleet ? 'active' : ''}`}>Todos</Link>
-          <Link href="/entregadores?fleet=leeva" className={`seg-btn ${sp.fleet === 'leeva' ? 'active' : ''}`}>Rede</Link>
-          <Link href="/entregadores?fleet=own" className={`seg-btn ${sp.fleet === 'own' ? 'active' : ''}`}>Próprios</Link>
+          <h1>Motoboys</h1>
+          <div className="sub">As equipes de todos os clientes — pra suporte. Cada restaurante gerencia a sua.</div>
         </div>
       </div>
 
@@ -49,7 +47,7 @@ export default async function Entregadores({ searchParams }: { searchParams: Pro
             <tr>
               <th>Nome</th>
               <th>WhatsApp</th>
-              <th>Frota</th>
+              <th>Restaurante</th>
               <th>Status</th>
               <th style={{ textAlign: 'right' }}>Entregas</th>
               <th style={{ textAlign: 'right' }}>Aceitação</th>
@@ -71,7 +69,7 @@ export default async function Entregadores({ searchParams }: { searchParams: Pro
                     <a href={waLink(m.phone)!} target="_blank" rel="noreferrer"><Icon name="whatsapp" size={12} /> {m.phone}</a>
                   ) : '—'}
                 </td>
-                <td>{m.fleet === 'leeva' ? 'Rede' : 'Própria'}</td>
+                <td>{m.restaurantId ? (restName.get(m.restaurantId) ?? '—') : '—'}</td>
                 <td>{STATUS[m.status] ?? m.status}</td>
                 <td style={{ textAlign: 'right' }}>{num(m.deliveriesTotal)}</td>
                 <td style={{ textAlign: 'right' }}>{pctText(Math.round(m.acceptanceRate))}</td>

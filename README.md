@@ -7,7 +7,13 @@ logística e **cuida da entrega sozinho**: analisa, escolhe o melhor entregador
 para aquela entrega agora, envia a oferta, acompanha e mede.
 
 Fluxo central: **PEDIDO → DESPACHO AUTOMÁTICO → MOTOBOY → ROTA → CLIENTE → ENTREGA → INDICADORES**
-O restaurante **nunca** procura, escolhe ou aciona entregador manualmente.
+O despacho é **automático**; se quiser, o dono passa por cima e manda o pedido pra alguém da equipe pelo mapa Ao vivo.
+
+
+> **Modelo atual (11/10/2026):** só a frota **própria** do estabelecimento + mensalidade.
+> Não existe mais rede Leeva, crédito, margem por entrega nem carteira do motoboy — o
+> histórico das fases abaixo cita essas partes, mas o código delas foi removido.
+> Ver `CLAUDE.md` e `docs/DECISOES-NOTURNAS.md` (11/10).
 
 - **`apps/restaurante`** — painel web (Next.js 15). Porta **3000**.
 - **`apps/motoboy`** — PWA do entregador (Next.js 15). Porta **3001**.

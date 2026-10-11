@@ -1,7 +1,6 @@
 import Link from 'next/link';
-import { BadgeCheck, ChevronRight, FileText, MapPin, Phone, ShieldCheck, Star, TrendingUp, User, Wallet } from 'lucide-react';
+import { BadgeCheck, ChevronRight, MapPin, Phone, ShieldCheck, Star, TrendingUp, User } from 'lucide-react';
 import { requireMotoboyContext, adminDb } from '@/lib/context';
-import { getMotoboyPixInfo } from '@leeva/shared/services';
 import { logout } from '../../login/actions';
 import Avatar from '../_lib/Avatar';
 import { ThemeToggle } from '../_lib/ThemeToggle';
@@ -18,16 +17,11 @@ export default async function PerfilPage() {
   const ctx = await requireMotoboyContext();
   const db = adminDb();
 
-  const [{ data: m }, pix] = await Promise.all([
-    db
-      .from('motoboys')
-      // avatar_url entra quando a migration 0030 for aplicada + houver upload
-      // (selfie da verificação de identidade). Até lá, Avatar mostra iniciais.
-      .select('phone, city, rating, deliveries_completed')
-      .eq('id', ctx.motoboyId)
-      .maybeSingle(),
-    getMotoboyPixInfo(db, ctx.motoboyId),
-  ]);
+  const { data: m } = await db
+    .from('motoboys')
+    .select('phone, city, rating, deliveries_completed')
+    .eq('id', ctx.motoboyId)
+    .maybeSingle();
 
   return (
     <div className="grid" style={{ gap: 16 }}>
@@ -91,35 +85,8 @@ export default async function PerfilPage() {
         </div>
       </div>
 
-      <div className="section-title">Documentos</div>
+      <div className="section-title">Mais</div>
       <div className="icon-rows">
-        <Link href="/documentos" className="icon-row" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <span className="icon-row-icon"><FileText size={16} strokeWidth={2} /></span>
-          <div style={{ flex: 1 }}>
-            <div className="icon-row-label">CRLV e foto do rosto</div>
-            <div className="icon-row-value">Enviar ou atualizar</div>
-          </div>
-          <ChevronRight size={16} color="var(--faint)" />
-        </Link>
-      </div>
-
-      <div className="section-title">Recebimento</div>
-      <div className="icon-rows">
-        <Link href="/pagamentos" className="icon-row" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <span className="icon-row-icon"><Wallet size={16} strokeWidth={2} /></span>
-          <div style={{ flex: 1 }}>
-            <div className="icon-row-label">Chave Pix (repasse)</div>
-            <div className="icon-row-value">{pix.masked ?? 'Cadastrar'}</div>
-          </div>
-          <ChevronRight size={16} color="var(--faint)" />
-        </Link>
-        <Link href="/pagamentos" className="icon-row" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <span className="icon-row-icon"><Wallet size={16} strokeWidth={2} /></span>
-          <div style={{ flex: 1 }}>
-            <div className="icon-row-label">Carteira</div>
-          </div>
-          <ChevronRight size={16} color="var(--faint)" />
-        </Link>
         <Link href="/desempenho" className="icon-row" style={{ textDecoration: 'none', color: 'inherit' }}>
           <span className="icon-row-icon"><TrendingUp size={16} strokeWidth={2} /></span>
           <div style={{ flex: 1 }}>

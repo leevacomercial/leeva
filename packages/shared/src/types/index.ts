@@ -108,6 +108,9 @@ export type LogisticsConfig = {
   /** Tempo prometido ao cliente (min, contado da criação do pedido). A rota
    *  do motoboy prioriza quem está mais perto de estourar esse prazo. */
   delivery_promise_minutes?: number;
+  /** Escalas: true = despacho automático só chama motoboy da frota própria
+   *  com turno cobrindo o horário atual (tabela driver_shifts). */
+  shifts_enforced?: boolean;
 };
 
 /** Configuração do motor de remuneração (payout_policies.config). */

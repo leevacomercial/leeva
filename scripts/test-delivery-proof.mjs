@@ -31,7 +31,7 @@ const DEST = { lat: -7.115, lng: -34.861 };
 async function makeOrder(status = 'in_route') {
   const { data: r } = await db
     .from('restaurants')
-    .insert({ name: '[DP] R', latitude: DEST.lat, longitude: DEST.lng, fleet_mode: 'leeva', onboarding_completed: true })
+    .insert({ name: '[DP] R', latitude: DEST.lat, longitude: DEST.lng, fleet_mode: 'own', onboarding_completed: true })
     .select('id')
     .single();
   cleanup.push(() => db.from('restaurants').delete().eq('id', r.id));

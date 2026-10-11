@@ -237,8 +237,8 @@ export default function OpsCenter({
               <div key={g.key}>
                 <div className="ops-group">{g.title} · {g.orders.length}</div>
                 {g.orders.map((o) => (
+                  <div key={o.id}>
                   <button
-                    key={o.id}
                     type="button"
                     onClick={() => setFocusId(o.id)}
                     className={`ops-item ${focusId === o.id ? 'active' : ''}`}
@@ -254,6 +254,10 @@ export default function OpsCenter({
                     </span>
                     {o.late && <span className="tag red">atrasada</span>}
                   </button>
+                  {g.key === 'searching' && focusId === o.id && hasTeam && (
+                    <ManualDispatch order={o} team={team} orders={map.orders} onDone={refresh} />
+                  )}
+                  </div>
                 ))}
               </div>
             ))}
@@ -269,6 +273,83 @@ export default function OpsCenter({
 }
 
 const FREE_COLOR = '#a78bfa';
+
+/** Distância em linha reta (km) — só pra ordenar quem está mais perto. */
+function km(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
+  const R = 6371;
+  const dLat = ((b.latitude - a.latitude) * Math.PI) / 180;
+  const dLng = ((b.longitude - a.longitude) * Math.PI) / 180;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a.latitude * Math.PI) / 180) * Math.cos((b.latitude * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/**
+ * "Mandar pra…": o despacho é automático, mas o dono pode passar por cima e
+ * entregar o pedido direto pra alguém da equipe que está online.
+ */
+function ManualDispatch({
+  order,
+  team,
+  orders,
+  onDone,
+}: {
+  order: MapOrder;
+  team: MapData['team'];
+  orders: MapOrder[];
+  onDone: () => Promise<void>;
+}) {
+  const online = team
+    .filter((d) => d.state !== 'offline')
+    .map((d) => ({
+      ...d,
+      load: orders.filter((o) => o.motoboyId === d.id).length,
+      dist: d.position && order.destination ? km(d.position, order.destination) : null,
+    }))
+    .sort((a, b) => (a.state === b.state ? (a.dist ?? 99) - (b.dist ?? 99) : a.state === 'free' ? -1 : 1));
+  const [pick, setPick] = useState(online[0]?.id ?? '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  if (!online.length) {
+    return <div className="ops-dispatch muted">Ninguém da equipe online agora pra mandar manualmente.</div>;
+  }
+
+  async function send() {
+    setBusy(true);
+    setErr(null);
+    try {
+      await apiPost(`/api/orders/${order.id}/dispatch`, { motoboyId: pick });
+      await onDone();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="ops-dispatch">
+      <span className="muted" style={{ fontSize: 12 }}>Não quer esperar? Mande direto:</span>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <select className="select" value={pick} onChange={(e) => setPick(e.target.value)} disabled={busy} style={{ flex: 1, minWidth: 0 }}>
+          {online.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.name.split(' ')[0]} — {STATE_LABEL[d.state]}
+              {d.load ? ` (${d.load} na rota)` : ''}
+              {d.dist != null ? ` · ${d.dist.toFixed(1).replace('.', ',')} km` : ''}
+            </option>
+          ))}
+        </select>
+        <button type="button" className="btn primary sm" onClick={send} disabled={busy || !pick}>
+          {busy ? '…' : 'Mandar'}
+        </button>
+      </div>
+      {err && <span style={{ color: 'var(--danger)', fontSize: 12 }}>{err}</span>}
+    </div>
+  );
+}
 const STATE_LABEL = { busy: 'em entrega', free: 'livre', offline: 'offline' } as const;
 
 /** A equipe agora: quem está livre, quem está levando o quê e quem sumiu do GPS. */

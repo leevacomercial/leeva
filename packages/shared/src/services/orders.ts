@@ -17,7 +17,6 @@ import { finalizeLogisticsForOrder } from './autodispatch';
 import { finalizeDeliveryCharge } from './payout';
 import { recordDeliveryUsage } from './billing';
 import { recordIncident } from './reputation';
-import { consumeCreditForOrder, refundCreditForOrder } from './credits';
 import { notifyDriver } from './notify-driver';
 import type { IncidentOrigin } from '../types';
 
@@ -39,7 +38,7 @@ function generateDeliveryConfirmationCode(): string {
 export type CreateResult =
   | { ok: true; orderId: string; orderNumber: number; duplicate: false }
   | { ok: true; orderId: string; orderNumber: number; duplicate: true }
-  | { ok: false; error: string; code?: 'address_not_found' | 'geocoder_unavailable' | 'insufficient_credit' };
+  | { ok: false; error: string; code?: 'address_not_found' | 'geocoder_unavailable' };
 
 /**
  * Cria um pedido interno a partir de um NormalizedOrder.
@@ -52,9 +51,8 @@ export async function createOrderFromNormalized(
   opts: {
     integrationEventId?: string;
     requireConfirmation?: boolean;
-    skipCredit?: boolean;
-    /** entra "segurado": aparece no painel/mapa, mas não despacha nem
-     *  desconta crédito até o restaurante clicar "Chamar entregador". */
+    /** entra "segurado": aparece no painel/mapa, mas não despacha até o
+     *  restaurante clicar "Chamar entregador". */
     holdForReview?: boolean;
   } = {},
 ): Promise<CreateResult> {
@@ -212,7 +210,7 @@ export async function createOrderFromNormalized(
   }
 
   // TAXA DA ENTREGA — calculada UMA VEZ, aqui. Tudo depois lê o valor gravado.
-  // Pedido "segurado" (holdForReview): a taxa e o crédito só entram quando o
+  // Pedido "segurado" (holdForReview): a taxa só é calculada quando o
   // restaurante clicar "Chamar entregador" (ver callDriverForOrder).
   let charge: Awaited<ReturnType<typeof finalizeDeliveryCharge>> = null;
   if (!opts.holdForReview) {
@@ -220,30 +218,6 @@ export async function createOrderFromNormalized(
       charge = await finalizeDeliveryCharge(db, order.id, restaurantId);
     } catch (e) {
       console.error('[orders] cálculo da taxa falhou (ignorado):', (e as Error).message);
-    }
-  }
-
-  // CRÉDITO — desconta o total do saldo. Sem saldo → o pedido NÃO é criado.
-  if (!opts.skipCredit && charge && charge.total > 0) {
-    try {
-      const c = await consumeCreditForOrder(
-        db,
-        restaurantId,
-        charge.total,
-        order.id,
-        `Entrega #${order.order_number ?? ''} — ${charge.distanceKm ?? '?'} km`,
-      );
-      if (!c.ok) {
-        // rollback: apaga o pedido recém-criado
-        await db.from('order_items').delete().eq('order_id', order.id);
-        await db.from('orders').delete().eq('id', order.id);
-        return {
-          ok: false,
-          error: `Saldo de créditos insuficiente. Esta entrega custa ${brl(charge.total)} e você tem ${brl(c.balance)}. Compre mais créditos para continuar.`,
-        };
-      }
-    } catch (e) {
-      console.error('[orders] débito de crédito falhou (ignorado):', (e as Error).message);
     }
   }
 
@@ -330,15 +304,15 @@ export async function markReady(db: DB, orderId: string, restaurantId: string, a
 }
 
 /**
- * "Chamar entregador" para um pedido SEGURADO (dispatch_hold). Só aqui a taxa
- * é calculada e o crédito é descontado — antes disso o pedido só existe no
- * painel/mapa. Sem saldo → NÃO libera (o pedido continua segurado).
+ * "Chamar entregador" para um pedido SEGURADO (dispatch_hold). Só aqui o
+ * valor do motoboy é calculado e o despacho liberado — antes disso o pedido
+ * só existe no painel/mapa.
  */
 export async function callDriverForOrder(
   db: DB,
   orderId: string,
   restaurantId: string,
-): Promise<{ ok: true; cost: number } | { ok: false; error: string; code?: 'insufficient_credit' | 'not_held' }> {
+): Promise<{ ok: true; cost: number } | { ok: false; error: string; code?: 'not_held' }> {
   const { data: order } = await db
     .from('orders')
     .select('id, restaurant_id, status, dispatch_hold, dispatch_state, motoboy_id, driver_payout')
@@ -362,17 +336,6 @@ export async function callDriverForOrder(
   if (!cost) {
     const { data: o2 } = await db.from('orders').select('leeva_fee').eq('id', orderId).maybeSingle();
     cost = Number(o2?.leeva_fee ?? 0);
-  }
-
-  if (cost > 0) {
-    const c = await consumeCreditForOrder(db, restaurantId, cost, orderId, `Entrega #${orderId.slice(0, 8)}`);
-    if (!c.ok) {
-      return {
-        ok: false,
-        code: 'insufficient_credit',
-        error: `Saldo insuficiente. Esta entrega custa ${brl(cost)} e você tem ${brl(c.balance)}.`,
-      };
-    }
   }
 
   await db
@@ -485,13 +448,6 @@ export async function advanceOrderStatus(
       .is('responded_at', null);
     await db.from('orders').update({ dispatch_state: 'none' }).eq('id', orderId);
 
-    // estorna o crédito consumido por este pedido
-    try {
-      await refundCreditForOrder(db, orderId);
-    } catch (e) {
-      console.error('[orders] estorno de crédito falhou (ignorado):', (e as Error).message);
-    }
-
     // cancelou DEPOIS de aceitar → incidente. A ORIGEM decide se penaliza:
     // problema do restaurante / cliente / sistema NÃO pune o entregador.
     if (order.motoboy_id && ['assigned', 'picked_up', 'in_route'].includes(order.status)) {
@@ -599,7 +555,7 @@ export async function assignDriver(
     .eq('id', motoboyId)
     .maybeSingle();
   if (!motoboy || !motoboy.active) return { ok: false, error: 'motoboy indisponível' };
-  const belongs = motoboy.fleet === 'leeva' || motoboy.restaurant_id === order.restaurant_id;
+  const belongs = motoboy.fleet === 'own' && motoboy.restaurant_id === order.restaurant_id;
   if (!belongs) return { ok: false, error: 'motoboy indisponível' };
   if (motoboy.status === 'offline') return { ok: false, error: 'motoboy está offline' };
 

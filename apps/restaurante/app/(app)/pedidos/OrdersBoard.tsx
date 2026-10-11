@@ -236,16 +236,7 @@ export default function OrdersBoard({
                     disabled={busyId === o.id}
                     onClick={() =>
                       act(async () => {
-                        try {
-                          await apiPost(`/api/orders/${o.id}/call-driver`);
-                        } catch (e) {
-                          const code = (e as { code?: string }).code;
-                          if (code === 'insufficient_credit') {
-                            setErr('Saldo insuficiente. Compre créditos para chamar o entregador.');
-                            return;
-                          }
-                          throw e;
-                        }
+                        await apiPost(`/api/orders/${o.id}/call-driver`);
                       }, o.id)
                     }
                   >

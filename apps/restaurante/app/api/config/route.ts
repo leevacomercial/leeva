@@ -22,7 +22,7 @@ export async function GET() {
       .maybeSingle();
     const payout = await getPayoutPolicy(db, ctx.restaurantId);
     return json({
-      fleetMode: rst?.fleet_mode ?? 'leeva',
+      fleetMode: 'own' as const,
       name: rst?.name,
       address: rst?.address,
       latitude: rst?.latitude,
@@ -50,7 +50,6 @@ export async function POST(req: Request) {
   if (ctx.role !== 'restaurant_owner') return forbidden('Apenas o dono pode alterar a configuração.');
   try {
     const body = (await req.json().catch(() => ({}))) as {
-      fleetMode?: string;
       latitude?: number;
       longitude?: number;
       logistics?: Partial<LogisticsConfig>;
@@ -84,13 +83,8 @@ export async function POST(req: Request) {
       dispatch_lead_minutes: num(L.dispatch_lead_minutes, 0, 60, existing.dispatch_lead_minutes),
     };
 
-    const fleetMode = ['own', 'leeva', 'hybrid'].includes(body.fleetMode ?? '')
-      ? body.fleetMode
-      : undefined;
-
     // frota própria: o estabelecimento define as próprias taxas
-    const ownFleet = (fleetMode ?? current?.fleet_mode) === 'own';
-    if (ownFleet) {
+    {
       logistics.customer_fee = num(L.customer_fee, 0, 200, existing.customer_fee);
       logistics.customer_fee_included_km = num(L.customer_fee_included_km, 0, 50, existing.customer_fee_included_km ?? 3);
       logistics.customer_fee_per_extra_km = num(L.customer_fee_per_extra_km, 0, 50, existing.customer_fee_per_extra_km ?? 0);
@@ -146,7 +140,6 @@ export async function POST(req: Request) {
       logistics_config: logistics as unknown as Database['public']['Tables']['restaurants']['Update']['logistics_config'],
     };
     if (businessHours) upd.business_hours = businessHours as unknown as Database['public']['Tables']['restaurants']['Update']['business_hours'];
-    if (fleetMode) upd.fleet_mode = fleetMode as 'own' | 'leeva' | 'hybrid';
     if (typeof body.latitude === 'number' && typeof body.longitude === 'number') {
       upd.latitude = body.latitude;
       upd.longitude = body.longitude;

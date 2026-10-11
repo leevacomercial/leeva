@@ -19,7 +19,6 @@ import type { Database } from '../types/database';
 import { haversineKm, isValidLatLng, type LatLng } from './geo';
 import { getRoutingService } from './routing';
 import { getPayoutPolicy, computeDriverPayout, computeGroupedStopPayout, getPlanMargin } from './payout';
-import { adjustCredit } from './credits';
 import { optimizeStopOrder } from './route-optimizer';
 import type { LogisticsConfig } from '../types';
 
@@ -202,13 +201,6 @@ export async function applyGroupPlan(db: DB, plan: GroupPlan): Promise<{ ok: boo
   const groupId = crypto.randomUUID();
 
   for (const stop of plan.stops) {
-    const { data: before } = await db
-      .from('orders')
-      .select('customer_fee, leeva_fee, driver_payout')
-      .eq('id', stop.orderId)
-      .maybeSingle();
-    const prevTotal = before?.customer_fee != null ? Number(before.customer_fee) : null;
-
     await db
       .from('orders')
       .update({
@@ -221,29 +213,13 @@ export async function applyGroupPlan(db: DB, plan: GroupPlan): Promise<{ ok: boo
       })
       .eq('id', stop.orderId);
 
-    // ajuste de crédito pela diferença (positivo = devolve ao restaurante)
-    if (prevTotal != null) {
-      const delta = round(prevTotal - stop.total);
-      if (Math.abs(delta) >= 0.01) {
-        try {
-          await adjustCredit(
-            db,
-            plan.restaurantId,
-            delta,
-            `Ajuste por agrupamento de entrega (pedido ${stop.orderId.slice(0, 8)})`,
-          );
-        } catch {
-          /* ajuste de crédito nunca bloqueia o despacho */
-        }
-      }
-    }
   }
   return { ok: true, groupId };
 }
 
 /**
- * Desfaz o grupo: limpa as colunas, recalcula a cobrança individual de cada
- * pedido (valor cheio) e ajusta o crédito de volta. Deixa os pedidos em
+ * Desfaz o grupo: limpa as colunas e recalcula o valor individual de cada
+ * pedido (valor cheio do motoboy). Deixa os pedidos em
  * 'searching' para o próximo tick do despacho individual.
  */
 export async function dissolveGroup(
@@ -260,8 +236,6 @@ export async function dissolveGroup(
   const { finalizeDeliveryCharge } = await import('./payout');
 
   for (const m of members) {
-    const prevTotal = m.customer_fee != null ? Number(m.customer_fee) : null;
-
     // zera para o finalize recalcular do zero
     await db
       .from('orders')
@@ -276,24 +250,7 @@ export async function dissolveGroup(
       })
       .eq('id', m.id);
 
-    const charge = await finalizeDeliveryCharge(db, m.id, m.restaurant_id);
-    const newTotal = charge?.total ?? null;
-
-    if (prevTotal != null && newTotal != null) {
-      const delta = round(prevTotal - newTotal); // negativo = volta a cobrar a diferença
-      if (Math.abs(delta) >= 0.01) {
-        try {
-          await adjustCredit(
-            db,
-            m.restaurant_id,
-            delta,
-            `Ajuste por desfazer agrupamento${opts.reason ? ` (${opts.reason})` : ''} (pedido ${m.id.slice(0, 8)})`,
-          );
-        } catch {
-          /* não bloqueia */
-        }
-      }
-    }
+    await finalizeDeliveryCharge(db, m.id, m.restaurant_id);
   }
   return { dissolved: members.length };
 }

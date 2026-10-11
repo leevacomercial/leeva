@@ -34,12 +34,8 @@ export * from './ratelimit';
 export * from './observability';
 export * from './platform';
 export * from './apikeys';
-export * from './credits';
 export * from './driver-prefs';
-export * from './credit-purchase';
 export * from './delivery-proof';
-export * from './asaas';
-export * from './driverpayouts';
 export * from './drivers';
 export * from './push';
 export * from './mailer';
@@ -51,3 +47,4 @@ export * from './grouping-dispatch';
 // Frota própria / roteirização (modelo mensal)
 export * from './route-optimizer';
 export * from './motoboy-route';
+export * from './shifts';

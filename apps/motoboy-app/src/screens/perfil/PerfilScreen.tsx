@@ -1,27 +1,15 @@
-import { useNavigation } from '@react-navigation/native';
-import { type NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { BadgeCheck, ChevronRight, FileText, MapPin, Moon, Phone, Star, TrendingUp, User, Wallet } from 'lucide-react-native';
+import { BadgeCheck, MapPin, Moon, Phone, Star, TrendingUp, User } from 'lucide-react-native';
 import React, { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { acceptTerms, setPixKey } from '../../api/motoboy';
+import { acceptTerms } from '../../api/motoboy';
 import { Avatar } from '../../components/Avatar';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
-import { TextField } from '../../components/TextField';
 import { useAuth } from '../../context/AuthContext';
-import type { AppStackParamList } from '../../navigation/types';
 import { useTheme, useThemeMode } from '../../theme/ThemeContext';
 import type { Theme } from '../../theme/theme';
-
-const PIX_TYPES: { v: string; label: string }[] = [
-  { v: 'cpf', label: 'CPF' },
-  { v: 'phone', label: 'Celular' },
-  { v: 'email', label: 'E-mail' },
-  { v: 'random', label: 'Aleatória' },
-  { v: 'cnpj', label: 'CNPJ' },
-];
 
 const APPEARANCE_OPTIONS: { v: 'system' | 'light' | 'dark'; label: string }[] = [
   { v: 'system', label: 'Automático' },
@@ -55,24 +43,6 @@ function Field({ icon, label, value }: { icon: React.ReactNode; label: string; v
   );
 }
 
-function PixSegmented({ value, onChange }: { value: string; onChange: (v: string) => void }): React.JSX.Element {
-  const styles = makeStyles(useTheme());
-  return (
-    <View style={styles.segmented}>
-      {PIX_TYPES.map((opt) => {
-        const active = value === opt.v;
-        return (
-          <Pressable key={opt.v} onPress={() => onChange(opt.v)} style={[styles.segment, active && styles.segmentActive]}>
-            <Text style={[styles.segmentLabel, active && styles.segmentLabelActive]} numberOfLines={1}>
-              {opt.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
 function AppearanceSegmented(): React.JSX.Element {
   const t = useTheme();
   const styles = makeStyles(t);
@@ -93,77 +63,10 @@ function AppearanceSegmented(): React.JSX.Element {
   );
 }
 
-function PixEditor({
-  pixKey,
-  pixKeyType,
-  onSaved,
-}: {
-  pixKey: string | null;
-  pixKeyType: string | null;
-  onSaved: () => Promise<void>;
-}): React.JSX.Element {
-  const t = useTheme();
-  const styles = makeStyles(t);
-  const [editing, setEditing] = useState(!pixKey);
-  const [type, setType] = useState(pixKeyType ?? 'cpf');
-  const [key, setKey] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  async function save(): Promise<void> {
-    if (key.trim().length < 5) {
-      Alert.alert('Chave inválida', 'Digite uma chave Pix válida.');
-      return;
-    }
-    setSaving(true);
-    try {
-      await setPixKey(key.trim(), type);
-      await onSaved();
-      setEditing(false);
-      setKey('');
-      Alert.alert('Pronto', 'Chave Pix salva. Seus repasses vão para essa chave.');
-    } catch (e) {
-      Alert.alert('Erro', (e as Error).message || 'Não foi possível salvar. Tente de novo.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (!editing && pixKey) {
-    return (
-      <Card style={styles.pixCard}>
-        <View style={styles.pixCurrentRow}>
-          <View style={styles.fieldIcon}>
-            <Wallet size={16} color={t.colors.primary} strokeWidth={2} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.fieldLabel}>Chave Pix (repasse)</Text>
-            <Text style={styles.fieldValue} numberOfLines={1}>
-              {pixKey}
-            </Text>
-          </View>
-        </View>
-        <Button label="Trocar chave" variant="outline" onPress={() => setEditing(true)} style={{ marginTop: t.spacing.md }} />
-      </Card>
-    );
-  }
-
-  return (
-    <Card style={styles.pixCard}>
-      <Text style={styles.fieldLabel}>Tipo da chave</Text>
-      <PixSegmented value={type} onChange={setType} />
-      <View style={{ marginTop: t.spacing.sm }}>
-        <TextField label="Sua chave Pix" value={key} onChangeText={setKey} autoCapitalize="none" placeholder="Cole ou digite aqui" />
-      </View>
-      <Button label="Salvar chave Pix" onPress={() => void save()} loading={saving} disabled={key.trim().length < 5} />
-    </Card>
-  );
-}
-
 export function PerfilScreen(): React.JSX.Element {
   const t = useTheme();
   const styles = makeStyles(t);
   const { me, logout, refreshMe } = useAuth();
-  const nav = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const [showTerms, setShowTerms] = useState(false);
   const [accepting, setAccepting] = useState(false);
 
@@ -223,23 +126,6 @@ export function PerfilScreen(): React.JSX.Element {
             value={APROVACAO[me?.approvalStatus ?? ''] ?? '—'}
           />
         </Card>
-
-        <SectionTitle>DOCUMENTOS</SectionTitle>
-        <Card style={styles.fieldsCard}>
-          <Pressable style={styles.field} onPress={() => nav.navigate('Documentos')}>
-            <View style={styles.fieldIcon}>
-              <FileText size={16} color={t.colors.textSecondary} strokeWidth={2} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.fieldLabel}>CRLV e foto do rosto</Text>
-              <Text style={styles.fieldValue}>Enviar ou atualizar</Text>
-            </View>
-            <ChevronRight size={16} color={t.colors.textSecondary} />
-          </Pressable>
-        </Card>
-
-        <SectionTitle>RECEBIMENTO</SectionTitle>
-        <PixEditor pixKey={me?.pixKey ?? null} pixKeyType={me?.pixKeyType ?? null} onSaved={refreshMe} />
 
         <SectionTitle>APARÊNCIA</SectionTitle>
         <Card style={styles.fieldsCard}>

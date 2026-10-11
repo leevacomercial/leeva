@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar } from '../../components/Avatar';
 import { Card } from '../../components/Card';
 import { LiveMapMini } from '../../components/LiveMapMini';
+import { MyShiftsCard } from '../../components/MyShiftsCard';
 import { SearchRadar } from '../../components/SearchRadar';
 import { useAuth } from '../../context/AuthContext';
 import { useRide } from '../../context/RideContext';
@@ -84,7 +85,7 @@ export function HomeScreen(): React.JSX.Element {
                   {podeFicarOnline
                     ? 'Toque no botão abaixo para começar a receber entregas.'
                     : approval === 'pending_approval'
-                      ? 'Seu cadastro ainda está em análise.'
+                      ? 'Sua conta ainda não foi liberada pelo estabelecimento.'
                       : approval === 'rejected'
                         ? (me?.approvalReason ?? 'Cadastro não aprovado — fale com o suporte.')
                         : 'Aceite os termos de uso na aba Perfil para poder ficar disponível.'}
@@ -116,12 +117,12 @@ export function HomeScreen(): React.JSX.Element {
         {approval !== 'approved' && (
           <Card style={styles.warnCard}>
             <Text style={styles.warnTitle}>
-              {approval === 'pending_approval' ? 'Cadastro em análise' : 'Cadastro não aprovado'}
+              {approval === 'pending_approval' ? 'Conta aguardando liberação' : 'Conta bloqueada'}
             </Text>
             <Text style={styles.warnText}>
               {approval === 'pending_approval'
-                ? 'Estamos conferindo seus documentos. Você vai receber um e-mail assim que for aprovado, e aí já pode ficar disponível.'
-                : (me?.approvalReason ?? 'Fale com o suporte para regularizar seu cadastro.')}
+                ? 'Fale com o estabelecimento onde você trabalha para liberar sua conta.'
+                : (me?.approvalReason ?? 'Fale com o estabelecimento onde você trabalha.')}
             </Text>
           </Card>
         )}
@@ -132,6 +133,8 @@ export function HomeScreen(): React.JSX.Element {
             <Text style={styles.warnText}>Abra a aba Perfil e aceite os termos de uso para poder ficar disponível.</Text>
           </Card>
         )}
+
+        <MyShiftsCard />
 
         <View style={styles.statsRow}>
           <View style={styles.statItem}>

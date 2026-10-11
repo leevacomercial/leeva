@@ -11,13 +11,11 @@ import { sendPushToMotoboy, type PushPayload } from './push';
 
 type DB = SupabaseClient<Database>;
 
-export type DriverNotifyKind = 'offer' | 'offer_cancelled' | 'payout_paid' | 'payout_failed' | 'generic';
+export type DriverNotifyKind = 'offer' | 'offer_cancelled' | 'generic';
 
 const ROUTE_BY_KIND: Record<DriverNotifyKind, string> = {
   offer: '/status',
   offer_cancelled: '/status',
-  payout_paid: '/pagamentos',
-  payout_failed: '/pagamentos',
   generic: '/status',
 };
 

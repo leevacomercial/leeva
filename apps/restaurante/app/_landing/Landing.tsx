@@ -9,53 +9,50 @@ import { body, display, mono } from './fonts';
  * /lojistas). Segue o modelo visual da landing da Farol, a pedido da dona.
  * Só promete o que o produto já faz hoje.
  *
- * Valores: entregador R$ 2,00/km, mínimo R$ 5,00 (payout_policies) + margem
- * do plano Livre R$ 1,00 por entrega. Se mudar lá, mude aqui. A página mostra
- * só o TOTAL por entrega — a divisão entregador/Leeva não é exibida.
+ * Modelo: o comércio usa os PRÓPRIOS motoboys e paga só a mensalidade.
+ * Valores: plano "mensal" (migration 0049, editável no admin › Planos) e
+ * teste grátis. Se mudar lá, mude aqui.
  */
 
-const PER_KM = 2;
-const MIN_PAYOUT = 5;
-const LEEVA_FEE = 1;
+const MENSALIDADE = 149;
+const DIAS_TESTE = 14;
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const total = (km: number) => Math.max(km * PER_KM, MIN_PAYOUT) + LEEVA_FEE;
-
-const CADASTRO_ENTREGADOR = 'https://leeva-motoboy.vercel.app/quero-entregar';
 
 const FRASES: { t: ReactNode; s: string }[] = [
-  { t: <>Motoboy faltou? <em>O Leeva acha outro.</em></>, s: 'Se um entregador recusa, a corrida vai sozinha para o próximo mais perto.' },
-  { t: <>Sem mensalidade. <em>Paga só a entrega.</em></>, s: 'Dia parado, custo zero. Nada de diária para motoboy esperando pedido.' },
-  { t: <>Você vê o preço <em>antes</em> de confirmar.</>, s: 'O valor é calculado pela distância e aparece antes de você criar a entrega.' },
-  { t: <>Cliente acompanha <em>sem baixar nada</em>.</>, s: 'Mande o link de rastreio pelo WhatsApp e ele vê o entregador chegando.' },
-  { t: <>Entrega confirmada com <em>código</em>.</>, s: 'O cliente passa 4 dígitos ao entregador. Pedido do iFood fecha com o localizador.' },
-  { t: <>Quem atende bem, <em>volta sempre</em>.</>, s: 'Marque seus entregadores favoritos e eles recebem suas corridas primeiro.' },
+  { t: <>Pedido entrou? <em>O motoboy já sabe.</em></>, s: 'O Leeva manda a entrega pro motoboy livre mais perto, direto no app dele.' },
+  { t: <>Sua equipe <em>no mapa, ao vivo</em>.</>, s: 'Veja quem está livre, quem está em rota e onde cada um está agora.' },
+  { t: <>Escala da semana <em>em dois cliques</em>.</>, s: 'Monte os turnos e o Leeva só chama quem está trabalhando.' },
+  { t: <>Cliente acompanha <em>sem baixar nada</em>.</>, s: 'Mande o link de rastreio pelo WhatsApp e ele vê o motoboy chegando.' },
+  { t: <>Entrega confirmada com <em>código</em>.</>, s: 'O cliente passa 4 dígitos ao motoboy. Pedido do iFood fecha com o localizador.' },
+  { t: <>Acerto do motoboy <em>pronto</em>.</>, s: 'Quanto pagar a cada um no fim do dia, já descontado o dinheiro que ele recebeu.' },
 ];
 
 const PASSOS = [
-  { t: 'Você cria a entrega', d: 'Nome, telefone e endereço do cliente. Confira o ponto no mapa e veja o valor antes de confirmar.', ic: 'M4 7h16M4 12h10M4 17h7M17 15l2 2 4-4' },
-  { t: 'O mais perto é chamado', d: 'O Leeva escolhe quem está mais perto e com a rota mais livre. Recusou? Vai pro próximo.', ic: 'M12 3a6 6 0 0 1 6 6c0 4.5-6 12-6 12S6 13.5 6 9a6 6 0 0 1 6-6Zm0 4.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z' },
-  { t: 'Todo mundo acompanha', d: 'Você vê entregador, foto e tempo no painel. O cliente acompanha pelo link.', ic: 'M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Zm9-2.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z' },
-  { t: 'Entregue com código', d: 'O cliente passa 4 dígitos, o entregador confirma e o pedido fecha sozinho.', ic: 'M5 12.5 9.2 16.7 19 7' },
+  { t: 'O pedido entra', d: 'Do WhatsApp, do seu cardápio, do iFood ou digitado no painel. Confira o ponto no mapa.', ic: 'M4 7h16M4 12h10M4 17h7M17 15l2 2 4-4' },
+  { t: 'O motoboy certo é chamado', d: 'O Leeva escolhe quem da sua equipe está livre, de turno e mais perto. Recusou? Vai pro próximo.', ic: 'M12 3a6 6 0 0 1 6 6c0 4.5-6 12-6 12S6 13.5 6 9a6 6 0 0 1 6-6Zm0 4.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z' },
+  { t: 'Todo mundo acompanha', d: 'Você vê a equipe inteira no mapa ao vivo. O cliente acompanha pelo link.', ic: 'M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Zm9-2.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z' },
+  { t: 'Entregue com código', d: 'O cliente passa 4 dígitos, o motoboy confirma e o pedido fecha sozinho.', ic: 'M5 12.5 9.2 16.7 19 7' },
 ];
 
 const RECURSOS: { t: string; d: string; meta: string; dif?: boolean }[] = [
-  { t: 'Despacho automático', d: 'Ninguém da sua equipe escolhe entregador. O Leeva chama o mais perto e, se ele não aceitar, tenta o próximo.', meta: 'chama em segundos', dif: true },
-  { t: 'Preço antes de confirmar', d: 'Calculado pela distância real. Sem surpresa no fim do mês.', meta: 'a partir de R$ 6', dif: true },
+  { t: 'Despacho automático', d: 'Ninguém precisa ficar escolhendo motoboy. O Leeva chama o melhor da sua equipe e, se ele não aceitar, tenta o próximo. Quer decidir? Mande direto pelo mapa.', meta: 'chama em segundos', dif: true },
+  { t: 'Mapa ao vivo da equipe', d: 'Todos os seus motoboys no mapa, com nome: quem está livre, quem está levando o quê e quem sumiu do GPS.', meta: 'tempo real', dif: true },
+  { t: 'Escalas e turnos', d: 'Monte a semana, repita na seguinte com um clique e ligue a trava pra só chamar quem está de turno.', meta: 'escala semanal', dif: true },
+  { t: 'Rotas agrupadas', d: 'Entregas no mesmo caminho saem juntas, na ordem que roda menos e respeita o prazo de cada cliente.', meta: 'roteirização' },
   { t: 'Rastreio para o cliente', d: 'Link de acompanhamento sem precisar baixar nada. Menos cliente ligando pra perguntar do pedido.', meta: 'link no WhatsApp' },
-  { t: 'Chat com o entregador', d: 'Fale com quem está levando o pedido direto do painel, ou chame no WhatsApp dele.', meta: 'chat · WhatsApp' },
-  { t: 'Entregadores favoritos', d: 'Quem atende bem sua loja recebe suas corridas primeiro. E quem você bloqueia não volta.', meta: 'favoritar · bloquear' },
-  { t: 'Pedidos do iFood', d: 'Lance o pedido com o localizador do iFood e use os entregadores do Leeva no lugar da entrega do app.', meta: 'localizador iFood' },
-  { t: 'Seus próprios motoboys', d: 'Já tem entregador fixo? Cadastre sua equipe e use a rede do Leeva só no pico ou quando faltar gente.', meta: 'frota própria + rede' },
-  { t: 'Crédito por Pix', d: 'Recarregue o saldo por Pix e cada entrega desconta do crédito. Tudo no extrato.', meta: 'Pix' },
+  { t: 'Acerto dos motoboys', d: 'Você define quanto paga por km. O Leeva soma as entregas de cada um e desconta o dinheiro que ele recebeu do cliente.', meta: 'por motoboy' },
+  { t: 'Chat com o motoboy', d: 'Fale com quem está levando o pedido direto do painel, ou chame no WhatsApp dele.', meta: 'chat · WhatsApp' },
+  { t: 'Pedidos do iFood e cardápios', d: 'Use sua equipe nos pedidos do iFood (entrega própria) e cole pedidos de qualquer cardápio digital.', meta: 'iFood · Anota AI' },
 ];
 
 const FAQ = [
-  { q: 'Tem mensalidade ou fidelidade?', a: 'Não. Você paga só as entregas que fizer, pelo valor calculado pela distância. Pode parar de usar quando quiser.' },
-  { q: 'Como eu pago?', a: 'Você recarrega crédito por Pix dentro do painel e cada entrega é descontada do saldo. O banco cobra R$ 0,99 por recarga.' },
-  { q: 'E se nenhum entregador aceitar?', a: 'A oferta passa automaticamente para o próximo disponível. Se ninguém puder, o painel te avisa na hora para você decidir o que fazer.' },
-  { q: 'Preciso instalar alguma coisa?', a: 'Não. O painel funciona no navegador do computador ou do celular. Quem usa aplicativo é o entregador.' },
-  { q: 'Onde o Leeva funciona?', a: 'Em João Pessoa. Estamos começando pela região do Planalto da Boa Esperança, Valentina e bairros vizinhos, onde temos mais entregadores.' },
+  { q: 'Quanto custa?', a: `Uma mensalidade de ${brl(MENSALIDADE)}, com ${DIAS_TESTE} dias grátis pra testar. Não tem taxa por entrega nem porcentagem sobre a sua venda.` },
+  { q: 'Preciso ter motoboy?', a: 'Sim. O Leeva organiza a SUA equipe: você cadastra seus motoboys, eles baixam o app e as entregas chegam pra eles. Você paga eles direto, do jeito que já paga hoje.' },
+  { q: 'E o pagamento dos motoboys?', a: 'Continua com você. O Leeva calcula quanto cada um fez no dia pela tabela que você definir e já desconta o dinheiro que ele recebeu de cliente.' },
+  { q: 'E se nenhum motoboy aceitar?', a: 'A oferta passa automaticamente para o próximo livre. Se ninguém puder, o painel te avisa na hora e você pode mandar direto pra alguém.' },
+  { q: 'Preciso instalar alguma coisa?', a: 'Não. O painel funciona no navegador do computador ou do celular. Quem usa aplicativo é o motoboy.' },
+  { q: 'Tem fidelidade?', a: 'Não. Você pode cancelar quando quiser.' },
 ];
 
 function Check() {
@@ -79,7 +76,7 @@ function Mark() {
 function Painel() {
   const rota = 'M40 150 C 90 150, 95 95, 150 92 S 215 60, 238 58 S 300 34, 318 28';
   return (
-    <div className={styles.painel} role="img" aria-label="Exemplo do painel do Leeva: entregador a caminho do cliente, com rota, tempo, distância, custo e código de entrega">
+    <div className={styles.painel} role="img" aria-label="Exemplo do painel do Leeva: motoboy da equipe a caminho do cliente, com rota, tempo, distância e código de entrega">
       <div className={styles.painelTop}>
         <b>Pedido #128 · Maria S.</b>
         <span className={`${styles.chip} ${styles.vivo}`}>ao vivo</span>
@@ -106,7 +103,7 @@ function Painel() {
       </svg>
       <div className={styles.kpis}>
         <div className={styles.kpi}>
-          <small>Entregador</small>
+          <small>Motoboy</small>
           <strong>João</strong>
           <span className={styles.d}>CG 160 · ★ 4,9</span>
         </div>
@@ -116,9 +113,9 @@ function Painel() {
           <span className={styles.d}>2,8 km</span>
         </div>
         <div className={styles.kpi}>
-          <small>Custo total</small>
-          <strong>{brl(total(2.8))}</strong>
-          <span className={styles.d}>sem mensalidade</span>
+          <small>Na rota</small>
+          <strong>2 entregas</strong>
+          <span className={styles.d}>saíram juntas</span>
         </div>
       </div>
       <div className={styles.codigo}>
@@ -143,7 +140,6 @@ export default function Landing() {
             <a href="#como-funciona">Como funciona</a>
             <a href="#demo">Na prática</a>
             <a href="#precos">Preços</a>
-            <a href="#entregadores">Entregadores</a>
             <a href="#duvidas">Dúvidas</a>
           </nav>
           <div className={styles.topCta}>
@@ -168,23 +164,22 @@ export default function Landing() {
             <div>
               <p className={styles.eyebrow}>Entregas para comércios · João Pessoa</p>
               <h1 className={styles.h1}>
-                Você cria a entrega. O motoboy mais perto <em>chega sozinho.</em>
+                Sua equipe de motoboys, <em>organizada sozinha.</em>
               </h1>
               <p className={styles.lead}>
-                O Leeva chama o entregador, acompanha a rota e fecha a entrega com código. Sem mensalidade: você paga só as
-                entregas que fizer.
+                O Leeva manda cada pedido pro motoboy certo da sua equipe, mostra todo mundo no mapa ao vivo, monta as rotas e
+                fecha a entrega com código. Mensalidade fixa, sem taxa por entrega.
               </p>
               <div className={styles.ctas}>
                 <Link href="/signup" className={`${styles.btn} ${styles.btnVerde} ${styles.pulsa}`}>
                   Criar conta grátis
                 </Link>
                 <a href="#precos" className={`${styles.btn} ${styles.btnGhost}`}>
-                  Ver preços
+                  Ver preço
                 </a>
               </div>
               <p className={styles.ctasNote}>
-                Cadastro em poucos minutos, sem cartão de crédito. É entregador?{' '}
-                <a href={CADASTRO_ENTREGADOR}>Cadastre-se aqui</a>.
+                {DIAS_TESTE} dias grátis, sem cartão de crédito. Cadastro em poucos minutos.
               </p>
             </div>
             <Painel />
@@ -215,18 +210,18 @@ export default function Landing() {
             <div className={styles.dores}>
               <div className={`${styles.dor} ${styles.revela}`} data-revela>
                 <span className={styles.q} aria-hidden="true">“</span>
-                <h3 className={styles.h3}>O motoboy faltou bem no pico.</h3>
-                <p>Com um entregador só, qualquer imprevisto trava a loja. No Leeva, a rede de entregadores da região cobre na hora.</p>
+                <h3 className={styles.h3}>Ninguém sabe quem leva o quê.</h3>
+                <p>Pedido gritado no balcão, motoboy perguntando no WhatsApp. No Leeva cada entrega já vai pro app de quem está livre.</p>
               </div>
               <div className={`${styles.dor} ${styles.revela}`} data-revela>
                 <span className={styles.q} aria-hidden="true">“</span>
-                <h3 className={styles.h3}>Pago diária até em dia fraco.</h3>
-                <p>Motoboy fixo custa o mesmo com 3 ou 30 pedidos. Aqui você paga por entrega feita, e o valor aparece antes.</p>
+                <h3 className={styles.h3}>No fim da noite, a conta não fecha.</h3>
+                <p>Quantas entregas cada um fez? Quanto de dinheiro ficou com ele? O Leeva mostra o acerto pronto, motoboy por motoboy.</p>
               </div>
               <div className={`${styles.dor} ${styles.revela}`} data-revela>
                 <span className={styles.q} aria-hidden="true">“</span>
                 <h3 className={styles.h3}>O cliente liga cinco vezes: “cadê meu pedido?”</h3>
-                <p>Mande o link de rastreio e ele acompanha o entregador chegando. Sua equipe volta a cuidar da cozinha.</p>
+                <p>Mande o link de rastreio e ele acompanha o motoboy chegando. Sua equipe volta a cuidar da cozinha.</p>
               </div>
             </div>
           </div>
@@ -263,7 +258,7 @@ export default function Landing() {
                 <p className={styles.lead}>É assim que o pedido anda no seu painel, do momento em que você confirma até o código ser conferido.</p>
               </div>
               <ul className={styles.pontos}>
-                <li><Check /><span><b>Nada de grupo de motoboy</b> no WhatsApp pra achar quem pega.</span></li>
+                <li><Check /><span><b>Nada de gritar no balcão</b> ou mandar áudio pra saber quem pega.</span></li>
                 <li><Check /><span><b>Tudo registrado:</b> quem levou, que horas saiu, que horas chegou.</span></li>
                 <li><Check /><span><b>Confirmação por código</b>, pra entrega não ser dada como feita sem ter chegado.</span></li>
               </ul>
@@ -288,8 +283,8 @@ export default function Landing() {
           <div className={`${styles.wrap} ${styles.recursosGrid}`}>
             <div className={`${styles.secHead} ${styles.fixo} ${styles.revela}`} data-revela>
               <p className={styles.eyebrow}>O que vem junto</p>
-              <h2 className={styles.h2}>Não é só um motoboy. É a entrega inteira organizada.</h2>
-              <p className={styles.lead}>Os itens em destaque são o que faz o Leeva diferente de chamar alguém num grupo.</p>
+              <h2 className={styles.h2}>Não é só um app de motoboy. É a sua entrega inteira organizada.</h2>
+              <p className={styles.lead}>Os itens em destaque são o que mais muda o dia a dia de quem tem equipe própria.</p>
               <Link href="/signup" className={`${styles.btn} ${styles.btnVerde}`}>
                 Quero isso na minha loja
               </Link>
@@ -316,42 +311,15 @@ export default function Landing() {
           <div className={styles.wrap}>
             <div className={`${styles.secHead} ${styles.revela}`} data-revela>
               <p className={styles.eyebrow}>Preço</p>
-              <h2 className={styles.h2}>Por entrega. Sem mensalidade, sem fidelidade.</h2>
+              <h2 className={styles.h2}>{brl(MENSALIDADE)} por mês. Tudo incluso.</h2>
               <p className={styles.lead}>
-                Cada entrega tem um valor calculado pela distância, e ele aparece antes de você confirmar. Nada de taxa fixa ou
-                porcentagem sobre a sua venda.
+                Uma mensalidade fixa, com {DIAS_TESTE} dias grátis pra testar. Sem taxa por entrega, sem porcentagem sobre a sua venda e
+                sem fidelidade. Motoboys, pedidos e entregas ilimitados.
               </p>
+              <Link href="/signup" className={`${styles.btn} ${styles.btnVerde}`}>
+                Começar o teste grátis
+              </Link>
             </div>
-          </div>
-        </section>
-
-        <section className={`${styles.sec} ${styles.fundo}`} id="entregadores">
-          <div className={`${styles.wrap} ${styles.split}`}>
-            <div className={`${styles.secHead} ${styles.revela}`} data-revela>
-              <p className={styles.eyebrow}>Para entregadores</p>
-              <h2 className={styles.h2}>Rode pelo Leeva na sua região.</h2>
-              <p className={styles.lead}>
-                Cadastre-se pelo site, envie seus documentos e, depois de aprovado, é só ficar disponível no app para receber
-                corridas perto de você.
-              </p>
-              <a href={CADASTRO_ENTREGADOR} className={`${styles.btn} ${styles.btnVerde}`}>
-                Quero ser entregador
-              </a>
-            </div>
-            <ul className={styles.vantagens}>
-              <li className={styles.revela} data-revela>
-                <h3 className={styles.h3}>Valor antes de aceitar</h3>
-                <p>Você vê quanto vai ganhar e a distância antes de dizer sim.</p>
-              </li>
-              <li className={styles.revela} data-revela>
-                <h3 className={styles.h3}>Saque por Pix</h3>
-                <p>O que você ganhou fica na carteira do app e você saca por Pix, uma vez por dia.</p>
-              </li>
-              <li className={styles.revela} data-revela>
-                <h3 className={styles.h3}>Você escolhe quando rodar</h3>
-                <p>Fica disponível quando quiser. Recusar uma corrida ruim não te prejudica.</p>
-              </li>
-            </ul>
           </div>
         </section>
 
@@ -375,7 +343,7 @@ export default function Landing() {
         <section className={`${styles.sec} ${styles.final}`}>
           <div className={styles.wrap}>
             <h2 className={styles.h2}>Faça sua primeira entrega hoje.</h2>
-            <p className={styles.lead}>Crie a conta, recarregue o crédito e mande o primeiro pedido.</p>
+            <p className={styles.lead}>Crie a conta, cadastre sua equipe e mande o primeiro pedido. Os primeiros {DIAS_TESTE} dias são por nossa conta.</p>
             <Link href="/signup" className={`${styles.btn} ${styles.btnVerde} ${styles.pulsa}`}>
               Criar conta grátis
             </Link>
@@ -388,7 +356,6 @@ export default function Landing() {
           <span>© 2026 Leeva · Logística de entregas para comércios</span>
           <span className={styles.rodapeLinks}>
             <Link href="/login">Entrar</Link>
-            <a href={CADASTRO_ENTREGADOR}>Quero ser entregador</a>
             <span>João Pessoa, PB</span>
           </span>
         </div>

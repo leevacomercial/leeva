@@ -3,7 +3,7 @@
  *
  * - completa o onboarding do restaurante demo (fleet hybrid, coords, taxa)
  * - cria assinatura (plano Pro, em trial)
- * - cria ~6 entregadores da REDE LEEVA (restaurant_id NULL, fleet 'leeva')
+ * - cria ~6 entregadores da equipe própria do restaurante demo
  *   espalhados por João Pessoa, com métricas variadas
  * - converte os motoboys "(demo)" existentes em frota própria
  *
@@ -82,8 +82,8 @@ async function main() {
     if (have.has(name)) continue;
     const r = REGIONS[i % REGIONS.length];
     await db.from('motoboys').insert({
-      restaurant_id: null,
-      fleet: 'leeva',
+      restaurant_id: rid,
+      fleet: 'own',
       full_name: name,
       phone: `8391000${2000 + i}`,
       status: i < 5 ? 'available' : 'offline',

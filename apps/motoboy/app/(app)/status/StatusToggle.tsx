@@ -108,9 +108,9 @@ export default function StatusToggle({
             {busy ? 'Um instante…' : online ? 'Ficar indisponível' : 'Ficar disponível'}
           </button>
         ) : (
-          <Link href="/documentos" className="home-toggle-btn off" style={{ textAlign: 'center', textDecoration: 'none' }}>
-            Completar cadastro
-          </Link>
+          <p className="muted" style={{ textAlign: 'center', margin: '12px 16px' }}>
+            Sua conta está bloqueada. Fale com o estabelecimento.
+          </p>
         )}
       </div>
 
@@ -119,14 +119,14 @@ export default function StatusToggle({
       <div className="home-sheet">
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'baseline' }}>
           <strong style={{ fontSize: 14 }}>Resumo do dia</strong>
-          <Link href="/pagamentos" className="muted" style={{ fontSize: 13 }}>
-            Ver extrato completo →
+          <Link href="/historico" className="muted" style={{ fontSize: 13 }}>
+            Ver histórico →
           </Link>
         </div>
         <div className="row" style={{ gap: 10, marginTop: 8 }}>
           <div className="panel" style={{ flex: 1, textAlign: 'center' }}>
             <div style={{ fontSize: 20, fontWeight: 700 }}>{formatCurrencyBRL(earnedToday)}</div>
-            <div className="muted" style={{ fontSize: 12 }}>ganhos hoje</div>
+            <div className="muted" style={{ fontSize: 12 }}>a receber hoje</div>
           </div>
           <div className="panel" style={{ flex: 1, textAlign: 'center' }}>
             <div style={{ fontSize: 20, fontWeight: 700 }}>{doneToday}</div>

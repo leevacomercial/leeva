@@ -18,28 +18,11 @@ const I = {
       <path d="M5 9v11h14V9M9 20v-6h6v6" />
     </>
   ),
-  sparkle: (
-    <>
-      <path d="M12 3v6M12 15v6M3 12h6M15 12h6" />
-      <path d="M6.5 6.5 9 9M15 15l2.5 2.5M17.5 6.5 15 9M9 15l-2.5 2.5" />
-    </>
-  ),
   scooter: (
     <>
       <circle cx="6" cy="17" r="2.5" />
       <circle cx="18" cy="17" r="2.5" />
       <path d="M8.5 17h7l2-7h2M6 10h5l3 7M13 6h3" />
-    </>
-  ),
-  transfer: (
-    <>
-      <path d="M4 8h13l-3-3M20 16H7l3 3" />
-    </>
-  ),
-  money: (
-    <>
-      <rect x="2.5" y="6" width="19" height="12" rx="2" />
-      <circle cx="12" cy="12" r="2.6" />
     </>
   ),
   ticket: (
@@ -49,13 +32,6 @@ const I = {
     </>
   ),
   star: <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 17l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9L12 3.5z" />,
-  vault: (
-    <>
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <circle cx="12" cy="12" r="4.2" />
-      <path d="M12 9.8v1.4M16.5 6v2M7.5 6v2" />
-    </>
-  ),
 } as const;
 
 type IconKey = keyof typeof I;
@@ -63,12 +39,8 @@ type IconKey = keyof typeof I;
 const NAV: { href: string; label: string; icon: IconKey }[] = [
   { href: '/visao-geral', label: 'Visão geral', icon: 'chart' },
   { href: '/operacao', label: 'Operação', icon: 'map' },
-  { href: '/restaurantes', label: 'Restaurantes', icon: 'store' },
-  { href: '/novos-motoboys', label: 'Novos motoboys', icon: 'sparkle' },
-  { href: '/entregadores', label: 'Entregadores', icon: 'scooter' },
-  { href: '/repasses', label: 'Repasses', icon: 'transfer' },
-  { href: '/caixa', label: 'Caixa', icon: 'vault' },
-  { href: '/financeiro', label: 'Financeiro', icon: 'money' },
+  { href: '/restaurantes', label: 'Clientes', icon: 'store' },
+  { href: '/entregadores', label: 'Motoboys', icon: 'scooter' },
   { href: '/planos', label: 'Planos', icon: 'ticket' },
 ];
 

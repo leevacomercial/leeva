@@ -37,14 +37,14 @@ const t = async (name, fn) => {
 const cleanup = [];
 
 async function main() {
-  const { data: rA } = await db.from('restaurants').insert({ name: '[F3] A', latitude: -7.11, longitude: -34.84, fleet_mode: 'leeva', onboarding_completed: true }).select('id').single();
-  const { data: rB } = await db.from('restaurants').insert({ name: '[F3] B', fleet_mode: 'leeva', onboarding_completed: true }).select('id').single();
+  const { data: rA } = await db.from('restaurants').insert({ name: '[F3] A', latitude: -7.11, longitude: -34.84, fleet_mode: 'own', onboarding_completed: true }).select('id').single();
+  const { data: rB } = await db.from('restaurants').insert({ name: '[F3] B', fleet_mode: 'own', onboarding_completed: true }).select('id').single();
   cleanup.push(() => db.from('restaurants').delete().in('id', [rA.id, rB.id]));
 
-  // entregadores da rede
+  // equipe própria do restaurante A
   const net = [];
   for (const [n, lat, lng, rating] of [['[F3] N1', -7.111, -34.841, 5], ['[F3] N2', -7.13, -34.80, 4.5], ['[F3] N3', -7.09, -34.83, 4.9]]) {
-    const { data } = await db.from('motoboys').insert({ restaurant_id: null, fleet: 'leeva', full_name: n, phone: `f3${Math.random()}`.slice(0, 15), status: 'available', current_latitude: lat, current_longitude: lng, location_updated_at: new Date().toISOString(), rating, deliveries_total: 20, deliveries_completed: 19, deliveries_late: 1, terms_accepted_version: 1 }).select('id, full_name').single();
+    const { data } = await db.from('motoboys').insert({ restaurant_id: rA.id, fleet: 'own', full_name: n, phone: `f3${Math.random()}`.slice(0, 15), status: 'available', current_latitude: lat, current_longitude: lng, location_updated_at: new Date().toISOString(), rating, deliveries_total: 20, deliveries_completed: 19, deliveries_late: 1, terms_accepted_version: 1 }).select('id, full_name').single();
     net.push(data);
     cleanup.push(() => db.from('motoboys').delete().eq('id', data.id));
   }

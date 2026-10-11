@@ -12,7 +12,6 @@ import { createClient } from '@supabase/supabase-js';
 import assert from 'node:assert/strict';
 import {
   createOrderFromNormalized,
-  addCredit,
   advanceOrderStatus,
   assignDriver,
   recommendDriver,
@@ -49,9 +48,6 @@ async function main() {
   const { data: rA } = await db.from('restaurants').insert({ name: '[ITEST] Rest A', latitude: -7.11, longitude: -34.84 }).select('id').single();
   const { data: rB } = await db.from('restaurants').insert({ name: '[ITEST] Rest B' }).select('id').single();
   cleanup.push(() => db.from('restaurants').delete().in('id', [rA.id, rB.id]));
-  cleanup.push(() => db.from('credit_ledger').delete().in('restaurant_id', [rA.id, rB.id]));
-  cleanup.push(() => db.from('restaurant_credits').delete().in('restaurant_id', [rA.id, rB.id]));
-  await addCredit(db, rA.id, 500, 'purchase', '[ITEST] saldo de teste');
 
   const { data: mA } = await db.from('motoboys').insert({
     restaurant_id: rA.id, full_name: '[ITEST] Moto A', phone: '0001',

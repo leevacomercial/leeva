@@ -35,7 +35,7 @@ export default function LoginPage() {
       </form>
 
       <p className="muted" style={{ marginTop: 16 }}>
-        Quer entregar pelo Leeva? <Link href="/quero-entregar">Cadastre-se aqui</Link>
+        Primeiro acesso? Peça o convite ao estabelecimento onde você trabalha e <Link href="/ativar">ative sua conta aqui</Link>.
       </p>
     </div>
   );

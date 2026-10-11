@@ -1,8 +1,7 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Home, Receipt, User, Wallet } from 'lucide-react-native';
+import { Home, Receipt, User } from 'lucide-react-native';
 import React from 'react';
 
-import { CarteiraScreen } from '../screens/carteira/CarteiraScreen';
 import { GanhosScreen } from '../screens/historico/GanhosScreen';
 import { HomeScreen } from '../screens/home/HomeScreen';
 import { PerfilScreen } from '../screens/perfil/PerfilScreen';
@@ -31,11 +30,6 @@ export function MainTabs(): React.JSX.Element {
         name="Ganhos"
         component={GanhosScreen}
         options={{ title: 'Ganhos', tabBarIcon: ({ color, size }) => <Receipt color={color} size={size} strokeWidth={2} /> }}
-      />
-      <Tab.Screen
-        name="Carteira"
-        component={CarteiraScreen}
-        options={{ title: 'Carteira', tabBarIcon: ({ color, size }) => <Wallet color={color} size={size} strokeWidth={2} /> }}
       />
       <Tab.Screen
         name="Perfil"

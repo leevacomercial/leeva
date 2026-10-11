@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { adminDb } from '@/lib/context';
-import { getDriverPerformance, getReputationConfig, getMotoboyPixInfo, getPayoutHistory, getPendingEarnings } from '@leeva/shared/services';
-import { money } from '../../_lib/ui';
+import { getDriverPerformance, getReputationConfig } from '@leeva/shared/services';
 import { pctText } from '../../_lib/ui';
 import { BlockButton } from './BlockButton';
 import { Icon } from '../../../_icons/Icon';
@@ -43,12 +42,6 @@ export default async function DriverDetail({ params }: { params: Promise<{ id: s
     .order('created_at', { ascending: false })
     .limit(40);
 
-  const [pix, payHistory, pendingEarn] = await Promise.all([
-    getMotoboyPixInfo(db, id),
-    getPayoutHistory(db, id, 20),
-    getPendingEarnings(db, id),
-  ]);
-
   const { data: offers } = await db
     .from('dispatch_attempts')
     .select('id, order_id, quality, quality_score, payout_estimate, distance_pickup_km, distance_total_km, outcome, counts_for_acceptance, offered_at')
@@ -62,7 +55,7 @@ export default async function DriverDetail({ params }: { params: Promise<{ id: s
         <div>
           <h1>{perf.name}</h1>
           <div className="sub">
-            <Link href="/entregadores">← Entregadores</Link> · {perf.fleet === 'leeva' ? 'Rede Leeva' : 'Frota própria'}
+            <Link href="/entregadores">← Motoboys</Link>
             {perf.blocked && <span className="tag red" style={{ marginLeft: 8 }}>bloqueado: {perf.blockedReason}</span>}
           </div>
         </div>
@@ -93,31 +86,6 @@ export default async function DriverDetail({ params }: { params: Promise<{ id: s
         <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
           Amostra: {perf.sample.offersAdequate} ofertas adequadas · {perf.sample.deliveriesTotal} entregas · {perf.sample.deliveriesCompleted} concluídas
         </p>
-      </div>
-
-      <div className="card">
-        <div className="card-title">Repasse</div>
-        <dl className="kv">
-          <dt>Chave Pix</dt>
-          <dd>{pix.masked ? `${pix.masked} (${pix.pixKeyType})` : <span className="tag red">não cadastrada</span>}</dd>
-          <dt>A receber (não fechado)</dt>
-          <dd>{money(pendingEarn.amount)} · {pendingEarn.count} entrega(s)</dd>
-        </dl>
-        {payHistory.length > 0 && (
-          <table className="tbl" style={{ marginTop: 8 }}>
-            <thead><tr><th>Data</th><th style={{ textAlign: 'right' }}>Entregas</th><th style={{ textAlign: 'right' }}>Valor</th><th>Status</th></tr></thead>
-            <tbody>
-              {payHistory.map((b) => (
-                <tr key={b.id}>
-                  <td>{new Date(b.periodDate).toLocaleDateString('pt-BR')}</td>
-                  <td style={{ textAlign: 'right' }}>{b.earningsCount}</td>
-                  <td style={{ textAlign: 'right' }}>{money(b.amount)}</td>
-                  <td>{b.status}{b.simulated ? ' (sim.)' : ''}{b.error ? ` — ${b.error}` : ''}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
       </div>
 
       <div className="grid-2">

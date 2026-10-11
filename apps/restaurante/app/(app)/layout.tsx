@@ -19,7 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // onboarding obrigatório antes de usar o painel
   const { data: rst } = await db
     .from('restaurants')
-    .select('onboarding_completed, fleet_mode')
+    .select('onboarding_completed')
     .eq('id', ctx.restaurantId)
     .maybeSingle();
 
@@ -29,10 +29,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect('/onboarding');
   }
 
-  // Modelo atual (10/10): frota própria + mensalidade — menu centrado no mapa
-  // ao vivo e na equipe. Restaurantes antigos da rede Leeva mantêm o menu antigo.
-  const ownFleet = rst?.fleet_mode === 'own';
-
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -40,7 +36,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           Leeva
           <small>{ctx.restaurantName}</small>
         </div>
-        <Nav ownFleet={ownFleet} />
+        <Nav />
         <div className="spacer" />
         <div className="side-foot">
           {ctx.fullName ?? ctx.email}

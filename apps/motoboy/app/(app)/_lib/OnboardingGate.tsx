@@ -3,28 +3,16 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { logout } from '../../login/actions';
-import { DocumentsForm } from '../documentos/DocumentsForm';
 
-type DocsStatus = {
-  personalDocUrl: string | null;
-  personalDocBackUrl: string | null;
-  vehicleDocUrl: string | null;
-  avatarUrl: string | null;
-  cpf: string | null;
-  city: string | null;
-};
-
-/** Bloqueia o app enquanto o cadastro não está aprovado + termos aceitos. */
+/** Bloqueia o app quando a conta foi reprovada ou os termos de uso estão pendentes. */
 export function OnboardingGate({
   state,
   reason,
   terms,
-  docsStatus,
 }: {
-  state: 'pending_approval' | 'rejected' | 'terms';
+  state: 'rejected' | 'terms';
   reason?: string | null;
   terms?: { version: number; content: string } | null;
-  docsStatus?: DocsStatus;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -47,52 +35,6 @@ export function OnboardingGate({
     } finally {
       setBusy(false);
     }
-  }
-
-  if (state === 'pending_approval') {
-    return (
-      <div className="screen">
-        <div className="panel" style={{ marginTop: 24 }}>
-          <h2 style={{ marginTop: 0 }}>Quase lá!</h2>
-          <p>
-            Falta completar seus dados abaixo. Assim que enviar tudo, nossa equipe confere e libera seu acesso —
-            geralmente em até um dia útil.
-          </p>
-          <div className="panel" style={{ padding: 12, marginTop: 12, borderColor: 'var(--brand)' }}>
-            <div style={{ fontWeight: 700 }}>📲 Passo 1: baixe o app do Leeva</div>
-            <p className="muted" style={{ fontSize: 13, margin: '6px 0 10px' }}>
-              Com o app (Android) você recebe as corridas com aviso e som, mesmo com a tela bloqueada. Use o mesmo
-              e-mail e senha do cadastro.
-            </p>
-            <a className="button" href="https://leeva-apk.vercel.app" target="_blank" rel="noreferrer" style={{ textDecoration: 'none', textAlign: 'center' }}>
-              Baixar o app (Android)
-            </a>
-            <p className="muted" style={{ fontSize: 11, margin: '8px 0 0' }}>
-              Ao abrir o arquivo, o Android pode pedir para permitir a instalação de fontes desconhecidas — toque em Permitir.
-            </p>
-          </div>
-        </div>
-
-        {docsStatus && (
-          <div style={{ marginTop: 16 }}>
-            <p className="muted" style={{ fontSize: 13, margin: '0 0 8px' }}>
-              Passo 2: complete seus dados (pode ser aqui pelo site mesmo, ou dentro do app depois de baixar)
-            </p>
-            <DocumentsForm initial={docsStatus} showProgress />
-          </div>
-        )}
-
-        <p className="muted" style={{ fontSize: 13, marginTop: 16 }}>
-          Assim que sua conta for aprovada, nossa equipe te avisa pelo WhatsApp.
-        </p>
-
-        <form action={logout} style={{ marginTop: 16 }}>
-          <button className="button secondary" style={{ width: 'auto', padding: '8px 12px' }}>
-            Sair
-          </button>
-        </form>
-      </div>
-    );
   }
 
   return (

@@ -53,7 +53,7 @@ export function PlansEditor({ initial }: { initial: Plan[] }) {
         name: code[0]!.toUpperCase() + code.slice(1),
         monthly_price: 0,
         per_delivery_price: 0,
-        per_delivery_margin: 1.0,
+        per_delivery_margin: 0,
         trial_days: 14,
         sort_order: plans.length + 1,
         active: false,
@@ -80,7 +80,6 @@ export function PlansEditor({ initial }: { initial: Plan[] }) {
             <label>Nome<input className="input" value={p.name} onChange={(e) => update(i, { name: e.target.value })} /></label>
             <label>Mensalidade (R$)<input className="input" type="number" step="0.01" value={p.monthly_price} onChange={(e) => update(i, { monthly_price: Number(e.target.value) })} /></label>
             <label>Valor por entrega (R$)<input className="input" type="number" step="0.01" value={p.per_delivery_price} onChange={(e) => update(i, { per_delivery_price: Number(e.target.value) })} /></label>
-            <label>Margem por entrega (R$)<input className="input" type="number" step="0.01" value={p.per_delivery_margin} onChange={(e) => update(i, { per_delivery_margin: Number(e.target.value) })} /></label>
             <label>Trial (dias)<input className="input" type="number" value={p.trial_days} onChange={(e) => update(i, { trial_days: Number(e.target.value) })} /></label>
             <label>Ordem<input className="input" type="number" value={p.sort_order} onChange={(e) => update(i, { sort_order: Number(e.target.value) })} /></label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 20 }}>

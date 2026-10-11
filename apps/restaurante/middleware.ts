@@ -9,7 +9,7 @@ export async function middleware(request: NextRequest) {
       '/mapa',
       '/indicadores',
       '/financeiro',
-      '/creditos',
+      '/escalas',
       '/integracoes',
       '/configuracoes',
       '/equipe',
