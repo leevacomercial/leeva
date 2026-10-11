@@ -11,7 +11,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://leeva-motoboy.vercel.app",
+        "EXPO_PUBLIC_API_URL": "https://leeva-motoboy-snowy.vercel.app",
         "EXPO_PUBLIC_SUPABASE_URL": "https://hqulvdxqivavhjpxguos.supabase.co"
       }
     },
@@ -21,7 +21,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://leeva-motoboy.vercel.app",
+        "EXPO_PUBLIC_API_URL": "https://leeva-motoboy-snowy.vercel.app",
         "EXPO_PUBLIC_SUPABASE_URL": "https://hqulvdxqivavhjpxguos.supabase.co"
       }
     },
@@ -31,7 +31,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://leeva-motoboy.vercel.app",
+        "EXPO_PUBLIC_API_URL": "https://leeva-motoboy-snowy.vercel.app",
         "EXPO_PUBLIC_SUPABASE_URL": "https://hqulvdxqivavhjpxguos.supabase.co"
       }
     }

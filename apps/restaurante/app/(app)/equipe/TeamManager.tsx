@@ -19,7 +19,7 @@ type Member = {
 };
 
 const APK_URL = 'https://leeva-apk.vercel.app';
-const ACTIVATE_URL = 'https://leeva-motoboy.vercel.app/ativar';
+const ACTIVATE_URL = 'https://leeva-motoboy-snowy.vercel.app/ativar';
 
 /** Convite pronto pro WhatsApp do entregador: baixar o app + ativar a conta com o telefone cadastrado. */
 function inviteLink(m: Member, restaurantName: string): string {

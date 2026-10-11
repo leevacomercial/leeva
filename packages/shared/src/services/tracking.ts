@@ -23,7 +23,7 @@ export function trackingBaseUrl(): string {
   return (
     process.env.LEEVA_TRACKING_BASE_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
-    'https://leeva-restaurante.vercel.app'
+    'https://leeva-restaurante-six.vercel.app'
   ).replace(/\/$/, '');
 }
 
