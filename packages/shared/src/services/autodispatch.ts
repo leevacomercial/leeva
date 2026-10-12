@@ -29,6 +29,10 @@ import { onShiftMotoboyIds } from './shifts';
 
 type DB = SupabaseClient<Database>;
 
+/** Só frota própria: a entrega vai direto pro primeiro da FILA (motoboys.queue_since,
+ *  migration 0054) em vez de virar oferta pra aceitar/recusar. */
+const QUEUE_DISPATCH = true;
+
 /** Pesos do score. Configuráveis via restaurants.logistics_config.dispatch_weights. */
 export const DEFAULT_DISPATCH_WEIGHTS = {
   etaToPickup: 40,
@@ -85,6 +89,8 @@ export type ScoredCandidate = {
   rating: number;
   reasons: string[];
   blockers: string[];
+  /** frota própria: desde quando está livre na fila (null = fora da fila) */
+  queueSince?: string | null;
 };
 
 // ---------------------------------------------------------------------------
@@ -162,7 +168,7 @@ export async function scoreCandidatesForOrder(
   const q = db
     .from('motoboys')
     .select(
-      'id, full_name, fleet, restaurant_id, status, active, blocked, current_latitude, current_longitude, location_updated_at, max_concurrent_deliveries, rating, deliveries_total, deliveries_completed, deliveries_late, avg_delay_min',
+      'id, full_name, fleet, restaurant_id, status, active, blocked, current_latitude, current_longitude, location_updated_at, max_concurrent_deliveries, rating, deliveries_total, deliveries_completed, deliveries_late, avg_delay_min, queue_since',
     )
     .eq('active', true)
     .eq('blocked', false)
@@ -244,8 +250,10 @@ export async function scoreCandidatesForOrder(
     // bastante pra chegar quando o pedido ficar pronto, sem deixar o
     // motoboy esperando parado no restaurante. Quem está mais longe entra
     // na janela mais cedo que quem está perto.
+    // Frota própria usa FILA: o primeiro da fila já pega a entrega e espera
+    // no balcão — não há janela de chamada.
     let minutesUntilDispatch: number | null = null;
-    if (readyEstimateAt && etaToPickupMin != null) {
+    if (readyEstimateAt && etaToPickupMin != null && !QUEUE_DISPATCH) {
       const triggerAt = readyEstimateAt.getTime() - (cfg.dispatch_lead_minutes + etaToPickupMin) * 60_000;
       const waitMin = (triggerAt - Date.now()) / 60_000;
       if (waitMin > 0) {
@@ -324,10 +332,20 @@ export async function scoreCandidatesForOrder(
       rating: Number(m.rating),
       reasons,
       blockers,
+      queueSince: m.queue_since,
     });
   }
 
   candidates.sort((a, b) => b.score - a.score);
+  // FILA da frota própria: entre os elegíveis, quem está LIVRE vai na ordem
+  // de chegada (queue_since mais antigo primeiro). Quem já está em entrega só
+  // recebe se ninguém estiver livre (aí vale a pontuação: rota no caminho).
+  if (QUEUE_DISPATCH) {
+    const rank = (c: ScoredCandidate) => (c.blockers.length ? 2 : c.activeDeliveries === 0 ? 0 : 1);
+    const at = (c: ScoredCandidate) => (c.queueSince ? new Date(c.queueSince).getTime() : Number.MAX_SAFE_INTEGER);
+    candidates.sort((a, b) => rank(a) - rank(b) || (rank(a) === 0 ? at(a) - at(b) : b.score - a.score));
+    for (const c of candidates) if (rank(c) === 0) c.reasons.unshift('primeiro da fila');
+  }
 
   let note: string | undefined;
   let waitingForTiming = false;
@@ -437,6 +455,7 @@ export async function runDispatchTick(db: DB, restaurantId?: string): Promise<Di
       .select('logistics_config, business_hours')
       .eq('id', o.restaurant_id)
       .maybeSingle();
+    const ownFleet = QUEUE_DISPATCH; // só frota própria (0053): a entrega vai pra fila, não é oferta
     const cfg = { ...DEFAULT_LOGISTICS_CONFIG, ...((rst?.logistics_config as Partial<LogisticsConfig>) ?? {}) };
     if (!cfg.auto_dispatch_enabled) continue;
     // fora do horário de funcionamento — não despacha (a cozinha nem deve
@@ -523,7 +542,7 @@ export async function runDispatchTick(db: DB, restaurantId?: string): Promise<Di
 
     // cria a oferta (unique index garante 1 aberta por pedido)
     const expiresAt = new Date(Date.now() + cfg.offer_timeout_seconds * 1000).toISOString();
-    const { error: offErr } = await db.from('dispatch_attempts').insert({
+    const { data: offer, error: offErr } = await db.from('dispatch_attempts').insert({
       restaurant_id: o.restaurant_id,
       order_id: o.id,
       motoboy_id: best.motoboyId,
@@ -542,10 +561,46 @@ export async function runDispatchTick(db: DB, restaurantId?: string): Promise<Di
       eta_dropoff_min: quality.etaDropoffMin != null ? Math.round(quality.etaDropoffMin) : null,
       group_order_ids: groupPlan ? groupPlan.orderIds : null,
       group_plan: groupPlan ? (groupPlan.stops as unknown as Database['public']['Tables']['dispatch_attempts']['Insert']['group_plan']) : null,
-    });
-    if (offErr) {
-      if (offErr.code === '23505') continue; // já há oferta aberta
+    }).select('id').single();
+    if (offErr || !offer) {
+      if (offErr?.code === '23505') continue; // já há oferta aberta
       res.details.push(`#${o.id.slice(0, 6)}: erro ao ofertar`);
+      continue;
+    }
+
+    // FROTA PRÓPRIA: o motoboy é do estabelecimento — não é oferta, é a vez
+    // dele na fila. A entrega já cai atribuída no app e ele só confirma.
+    if (ownFleet) {
+      const acc = await acceptOffer(db, offer.id, best.motoboyId, { via: 'queue' });
+      if (!acc.ok) {
+        res.details.push(`#${o.id.slice(0, 6)}: ${acc.error}`);
+        continue;
+      }
+      tickLoad.set(best.motoboyId, (tickLoad.get(best.motoboyId) ?? 0) + 1);
+      res.offered++;
+      res.details.push(`#${o.id.slice(0, 6)} → ${best.name} (fila)`);
+      const title = groupPlan ? `Nova rota — ${groupPlan.stops.length} entregas` : 'Nova entrega pra você';
+      await db.from('notifications').insert({
+        restaurant_id: o.restaurant_id,
+        order_id: o.id,
+        channel: 'in_app',
+        recipient_type: 'motoboy',
+        recipient: best.motoboyId,
+        template: 'motoboy.new_delivery',
+        title,
+        body: 'É a sua vez na fila. Abra o app pra ver a entrega.',
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        data: { order_id: o.id, grouped: !!groupPlan },
+      });
+      void sendPushToMotoboy(db, best.motoboyId, {
+        title,
+        body: 'É a sua vez na fila. Abra o app pra ver a entrega.',
+        url: '/entrega',
+        tag: 'offer',
+        urgent: true,
+        data: { order_id: o.id },
+      }).catch(() => {});
       continue;
     }
 
@@ -825,7 +880,7 @@ async function resolveNoDriverAlert(db: DB, restaurantId: string, orderId: strin
 }
 
 /** Motoboy aceita a oferta. CAS na oferta aberta + no motoboy_id do pedido. */
-export async function acceptOffer(db: DB, offerId: string, motoboyId: string) {
+export async function acceptOffer(db: DB, offerId: string, motoboyId: string, opts: { via?: 'queue' } = {}) {
   const nowIso = new Date().toISOString();
   const { data: closed } = await db
     .from('dispatch_attempts')
@@ -862,14 +917,18 @@ export async function acceptOffer(db: DB, offerId: string, motoboyId: string) {
 
   for (const oid of assigned.map((a) => a.id)) {
     await finalizeLogisticsForOrder(db, oid, restaurant_id);
-    await db.from('order_events').insert({
-      restaurant_id,
-      order_id: oid,
-      type: 'delivery.accepted',
-      actor_type: 'motoboy',
-      actor_id: motoboyId,
-      data: { via: 'auto_dispatch', grouped: orderIds.length > 1 },
-    });
+    // pela fila (frota própria) o motoboy ainda confirma no app — o aceite
+    // explícito (delivery.accepted) vem de acceptDelivery quando ele tocar.
+    if (opts.via !== 'queue') {
+      await db.from('order_events').insert({
+        restaurant_id,
+        order_id: oid,
+        type: 'delivery.accepted',
+        actor_type: 'motoboy',
+        actor_id: motoboyId,
+        data: { via: 'auto_dispatch', grouped: orderIds.length > 1 },
+      });
+    }
     // avisa o cliente: "um entregador está a caminho"
     try {
       await notifyForStatusChange(db, { restaurantId: restaurant_id, orderId: oid, toStatus: 'assigned' });

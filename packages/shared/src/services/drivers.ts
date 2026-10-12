@@ -11,6 +11,24 @@ type DB = SupabaseClient<Database>;
 export type ApprovalStatus = Database['public']['Enums']['driver_approval_status'];
 
 // ---------------------------------------------------------------------------
+// CPF (opcional no cadastro pela loja) — formato + dígito verificador
+// ---------------------------------------------------------------------------
+export function cleanCpf(v: string): string {
+  return (v ?? '').replace(/\D/g, '');
+}
+export function isValidCpf(v: string): boolean {
+  const c = cleanCpf(v);
+  if (c.length !== 11 || /^(\d)\1{10}$/.test(c)) return false;
+  const dv = (base: string, factorStart: number) => {
+    let sum = 0;
+    for (let i = 0; i < base.length; i++) sum += Number(base[i]) * (factorStart - i);
+    const r = (sum * 10) % 11;
+    return r === 10 ? 0 : r;
+  };
+  return dv(c.slice(0, 9), 10) === Number(c[9]) && dv(c.slice(0, 10), 11) === Number(c[10]);
+}
+
+// ---------------------------------------------------------------------------
 // TERMOS DE USO
 // ---------------------------------------------------------------------------
 export async function getActiveTerms(

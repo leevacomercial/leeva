@@ -103,43 +103,42 @@ const RESTAURANT = {
 
 // ---------------------------------------------------------------------------
 
-test('Bloco 3: pedido ainda em preparo — motoboy mais longe é chamado antes do mais próximo', async () => {
-  const preparingAt = new Date(Date.now() - 5 * 60_000).toISOString();
-  const db = makeFakeDb({
-    orderRow: baseOrder({ preparing_at: preparingAt, prep_estimate_minutes: 20 }), // pronto em ~15 min
-    restaurantRow: RESTAURANT,
-    motoboys: [motoboy('near', 'Perto', nearMotoboy), motoboy('far', 'Longe', farMotoboy)],
-  });
-
-  const { candidates, waitingForTiming } = await scoreCandidatesForOrder(db, 'order-1');
-  const near = candidates.find((c) => c.motoboyId === 'near')!;
-  const far = candidates.find((c) => c.motoboyId === 'far')!;
-
-  // longe: tempo até a coleta é maior que a folga até o pedido ficar pronto
-  // → já está na janela de chamada agora.
-  assert.equal(far.blockers.length, 0, `far não devia ter blocker: ${far.blockers.join(', ')}`);
-  assert.equal(far.minutesUntilDispatch, null);
-
-  // perto: chegaria bem antes do pedido ficar pronto → ainda não é a hora.
-  assert.ok(near.blockers.some((b) => b.includes('em preparo')), `near devia estar bloqueado por tempo: ${near.blockers.join(', ')}`);
-  assert.ok(near.minutesUntilDispatch != null && near.minutesUntilDispatch > 0);
-
-  assert.equal(waitingForTiming, false); // não é "sem ninguém" — o far já está elegível
-});
-
-test('Bloco 3: todos os candidatos ainda cedo → waitingForTiming, sem contar como falha', async () => {
+test('fila: pedido em preparo não espera janela — o primeiro da fila já recebe', async () => {
   const preparingAt = new Date(Date.now() - 1 * 60_000).toISOString();
   const db = makeFakeDb({
-    // prep_estimate bem longo: nem o motoboy "longe" alcança a janela ainda
     orderRow: baseOrder({ preparing_at: preparingAt, prep_estimate_minutes: 120 }),
     restaurantRow: RESTAURANT,
     motoboys: [motoboy('near', 'Perto', nearMotoboy), motoboy('far', 'Longe', farMotoboy)],
   });
 
-  const { candidates, waitingForTiming, note } = await scoreCandidatesForOrder(db, 'order-1');
-  assert.ok(candidates.every((c) => c.blockers.length === 1 && c.minutesUntilDispatch! > 0));
-  assert.equal(waitingForTiming, true);
-  assert.ok(note?.includes('em preparo'));
+  const { candidates, waitingForTiming } = await scoreCandidatesForOrder(db, 'order-1');
+  for (const c of candidates) {
+    assert.equal(c.minutesUntilDispatch, null);
+    assert.equal(c.blockers.length, 0, `${c.name} não devia ter blocker: ${c.blockers.join(', ')}`);
+  }
+  assert.equal(waitingForTiming, false);
+});
+
+test('fila: livre que ficou disponível primeiro vem na frente (mesmo mais longe); ocupado só depois', async () => {
+  const cedo = new Date(Date.now() - 30 * 60_000).toISOString();
+  const tarde = new Date(Date.now() - 2 * 60_000).toISOString();
+  const db = makeFakeDb({
+    orderRow: baseOrder({ status: 'ready' }),
+    restaurantRow: RESTAURANT,
+    motoboys: [
+      { ...motoboy('perto', 'Perto', nearMotoboy), queue_since: tarde },
+      { ...motoboy('longe', 'Longe', farMotoboy), queue_since: cedo },
+      { ...motoboy('ocupado', 'Ocupado', PICKUP), queue_since: null },
+    ],
+    activeOrders: [{ id: 'x', motoboy_id: 'ocupado', latitude: PICKUP.latitude, longitude: PICKUP.longitude, status: 'in_route' }],
+  });
+
+  const { candidates } = await scoreCandidatesForOrder(db, 'order-1');
+  assert.deepEqual(
+    candidates.map((c) => c.motoboyId),
+    ['longe', 'perto', 'ocupado'],
+  );
+  assert.ok(candidates[0]!.reasons.includes('primeiro da fila'));
 });
 
 test('Bloco 3: pedido já pronto (ready_at) despacha na hora, sem esperar ninguém', async () => {

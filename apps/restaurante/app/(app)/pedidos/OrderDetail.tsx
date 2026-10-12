@@ -54,6 +54,8 @@ type Detail = {
   deliveryPhotoUrl?: string | null;
 };
 
+type TeamDriver = { id: string; name: string; state: 'offline' | 'free' | 'busy'; activeOrders: number; queuePos: number | null };
+
 type GroupPeer = { orderNumber: number | null; customerName: string; seq: number | null };
 
 export default function OrderDetail({
@@ -72,8 +74,18 @@ export default function OrderDetail({
   const [d, setD] = useState<Detail | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [team, setTeam] = useState<TeamDriver[] | null>(null);
+  const [ownFleet, setOwnFleet] = useState(false);
+  const [pick, setPick] = useState('');
+  const open = !['delivered', 'cancelled'].includes(order.status);
 
   useEffect(() => {
+    apiGet<{ team: TeamDriver[]; ownFleet: boolean }>('/api/team')
+      .then((r) => {
+        setTeam(r.team);
+        setOwnFleet(r.ownFleet);
+      })
+      .catch(() => {});
     apiGet<Detail>(`/api/orders/${order.id}`).then(setD).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order.id]);
@@ -194,11 +206,23 @@ export default function OrderDetail({
         </div>
 
         <div>
-          <div className="card-title">Custo desta entrega</div>
-          <div style={{ fontSize: 22, fontWeight: 650 }}>
-            {order.leeva_fee != null ? formatCurrencyBRL(Number(order.leeva_fee)) : 'a calcular'}
-          </div>
-          <div className="muted" style={{ fontSize: 12 }}>descontado do seu crédito</div>
+          {ownFleet ? (
+            <>
+              <div className="card-title">Seu motoboy recebe</div>
+              <div style={{ fontSize: 22, fontWeight: 650 }}>
+                {order.driver_payout != null ? formatCurrencyBRL(Number(order.driver_payout)) : "a calcular"}
+              </div>
+              <div className="muted" style={{ fontSize: 12 }}>pela sua tabela — entra no acerto do motoboy</div>
+            </>
+          ) : (
+            <>
+              <div className="card-title">Custo desta entrega</div>
+              <div style={{ fontSize: 22, fontWeight: 650 }}>
+                {order.leeva_fee != null ? formatCurrencyBRL(Number(order.leeva_fee)) : 'a calcular'}
+              </div>
+              <div className="muted" style={{ fontSize: 12 }}>descontado do seu crédito</div>
+            </>
+          )}
           <table className="data" style={{ fontSize: 13, marginTop: 8 }}>
             <tbody>
               <tr><td>Distância</td><td>{order.route_distance_km != null ? `${Number(order.route_distance_km).toFixed(1)} km` : '—'}</td></tr>
@@ -229,10 +253,43 @@ export default function OrderDetail({
             {['searching', 'offered'].includes(order.dispatch_state)
               ? DISPATCH_STATE_LABELS[order.dispatch_state]
               : order.motoboy_id
-                ? 'Entregador atribuído automaticamente'
-                : DISPATCH_STATE_LABELS[order.dispatch_state]}
+                ? ownFleet
+                  ? 'Motoboy definido'
+                  : 'Entregador atribuído automaticamente'
+                : ownFleet
+                  ? 'Esperando o próximo da fila'
+                  : DISPATCH_STATE_LABELS[order.dispatch_state]}
           </div>
-          {!order.motoboy_id && ['none', 'searching'].includes(order.dispatch_state) && (
+          {ownFleet && open && team && (
+            <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+              <select className="input" value={pick} onChange={(e) => setPick(e.target.value)} style={{ flex: 1, minWidth: 180 }}>
+                <option value="">{order.motoboy_id ? 'Trocar motoboy…' : 'Escolher motoboy…'}</option>
+                {team
+                  .filter((m) => m.state !== 'offline' && m.id !== order.motoboy_id)
+                  .sort((a, b) => (a.queuePos ?? 99) - (b.queuePos ?? 99))
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} — {m.queuePos ? `${m.queuePos}º na fila` : m.state === 'busy' ? `em entrega (${m.activeOrders})` : 'livre'}
+                    </option>
+                  ))}
+              </select>
+              <button
+                className="btn sm primary"
+                disabled={busy || !pick}
+                onClick={() =>
+                  void run(() =>
+                    apiPost(`/api/orders/${order.id}/dispatch`, { motoboyId: pick, reassign: !!order.motoboy_id }),
+                  ).then(() => setPick(''))
+                }
+              >
+                {order.motoboy_id ? 'Trocar' : 'Mandar pra ele'}
+              </button>
+            </div>
+          )}
+          {ownFleet && open && team && team.every((m) => m.state === 'offline') && (
+            <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>Nenhum motoboy online agora.</div>
+          )}
+          {!ownFleet && !order.motoboy_id && ['none', 'searching'].includes(order.dispatch_state) && (
             <div style={{ marginTop: 8 }}>
               <button
                 className="btn sm"

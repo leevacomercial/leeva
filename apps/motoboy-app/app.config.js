@@ -36,7 +36,7 @@ module.exports = () => ({
     owner: 'leeva-jp',
     slug: 'leeva',
     scheme: 'leevamotoboy',
-    version: '1.0.16',
+    version: '1.0.17',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'dark',
@@ -58,7 +58,7 @@ module.exports = () => ({
 
     android: {
       package: 'br.com.leeva.motoboy',
-      versionCode: 17,
+      versionCode: 18,
       ...(hasAndroidFirebase ? { googleServicesFile: androidFirebasePath } : {}),
       adaptiveIcon: {
         backgroundColor: BRAND,

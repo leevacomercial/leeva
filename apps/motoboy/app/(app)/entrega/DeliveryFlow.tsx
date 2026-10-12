@@ -380,9 +380,22 @@ export default function DeliveryFlow({
                       <div className="panel" style={{ padding: 12 }}>
                         <div className="muted" style={{ fontSize: 12 }}>Localizador do iFood</div>
                         <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: '0.15em' }}>{current.ifood_locator ?? '—'}</div>
-                        <a className="button secondary" href="https://confirmacao-entrega-propria.ifood.com.br/" target="_blank" rel="noreferrer" style={{ textAlign: 'center', marginTop: 8 }}>
-                          Abrir confirmação do iFood
+                        <a
+                          className="button secondary"
+                          href="https://confirmacao-entrega-propria.ifood.com.br/"
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ textAlign: 'center', marginTop: 8 }}
+                          onClick={() => {
+                            // já copia o localizador: no site do iFood é só colar
+                            if (current.ifood_locator) void navigator.clipboard?.writeText(current.ifood_locator).catch(() => {});
+                          }}
+                        >
+                          Copiar localizador e abrir o iFood
                         </a>
+                        <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+                          No site do iFood: cole o localizador, peça ao cliente o código de 4 números e confirme.
+                        </div>
                       </div>
                       <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14 }}>
                         <input type="checkbox" checked={ifoodOk} onChange={(e) => setIfoodOk(e.target.checked)} />

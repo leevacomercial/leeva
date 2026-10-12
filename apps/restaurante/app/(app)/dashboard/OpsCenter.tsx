@@ -364,8 +364,8 @@ function TeamList({
   focusId: string | null;
   onFocus: (id: string) => void;
 }) {
-  const order = { busy: 0, free: 1, offline: 2 } as const;
-  const sorted = [...team].sort((a, b) => order[a.state] - order[b.state] || a.name.localeCompare(b.name));
+  const order = { free: 0, busy: 1, offline: 2 } as const;
+  const sorted = [...team].sort((a, b) => order[a.state] - order[b.state] || (a.queuePos ?? 99) - (b.queuePos ?? 99) || a.name.localeCompare(b.name));
   return (
     <div className="ops-list">
       {sorted.map((d) => {
@@ -388,7 +388,7 @@ function TeamList({
             >
               <span className="ops-item-title">{d.name}</span>
               <span className="ops-item-sub">
-                {STATE_LABEL[d.state]}
+                {d.queuePos ? `${d.queuePos}º na fila` : STATE_LABEL[d.state]}
                 {carrying.length > 0 ? ` · ${carrying.map((o) => `#${o.orderNumber ?? '—'}`).join(', ')}` : ''}
                 {noGps ? ' · sem GPS agora' : ''}
                 {d.lastSeenAt ? ` · visto ${ago(d.lastSeenAt)}` : ''}

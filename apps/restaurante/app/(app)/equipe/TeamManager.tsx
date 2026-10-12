@@ -8,6 +8,8 @@ type Member = {
   id: string;
   full_name: string;
   phone: string;
+  cpf: string | null;
+  pix_key: string | null;
   statusLabel: string;
   active: boolean;
   user_id: string | null;
@@ -18,7 +20,7 @@ type Member = {
   lastSeen: string | null;
 };
 
-const APK_URL = 'https://leeva-apk.vercel.app';
+const APK_URL = 'https://leeva-apk-gamma.vercel.app';
 const ACTIVATE_URL = 'https://leeva-motoboy-snowy.vercel.app/ativar';
 
 /** Convite pronto pro WhatsApp do entregador: baixar o app + ativar a conta com o telefone cadastrado. */
@@ -40,6 +42,8 @@ export default function TeamManager({ team, restaurantName }: { team: Member[]; 
   const router = useRouter();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [cpf, setCpf] = useState('');
+  const [pix, setPix] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -47,14 +51,29 @@ export default function TeamManager({ team, restaurantName }: { team: Member[]; 
     setBusy(true);
     setErr(null);
     try {
-      await apiPost('/api/team', { full_name: name, phone });
+      await apiPost('/api/team', { full_name: name, phone, cpf, pix_key: pix });
       setName('');
       setPhone('');
+      setCpf('');
+      setPix('');
       router.refresh();
     } catch (e) {
       setErr((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function editExtras(m: Member) {
+    const c = window.prompt(`CPF de ${m.full_name} (opcional, deixe vazio pra não informar):`, m.cpf ?? '');
+    if (c === null) return;
+    const p = window.prompt(`Chave Pix de ${m.full_name} (opcional — pra você pagar ele):`, m.pix_key ?? '');
+    if (p === null) return;
+    try {
+      await apiPost('/api/team', { id: m.id, cpf: c, pix_key: p });
+      router.refresh();
+    } catch (e) {
+      alert((e as Error).message);
     }
   }
 
@@ -74,6 +93,8 @@ export default function TeamManager({ team, restaurantName }: { team: Member[]; 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <input className="input" placeholder="Nome" value={name} onChange={(e) => setName(e.target.value)} style={{ flex: 1, minWidth: 160 }} />
           <input className="input" placeholder="Telefone (com DDD)" value={phone} onChange={(e) => setPhone(e.target.value)} style={{ flex: 1, minWidth: 160 }} />
+          <input className="input" placeholder="CPF (opcional)" value={cpf} onChange={(e) => setCpf(e.target.value)} style={{ flex: 1, minWidth: 140 }} />
+          <input className="input" placeholder="Chave Pix (opcional)" value={pix} onChange={(e) => setPix(e.target.value)} style={{ flex: 1, minWidth: 160 }} />
           <button className="btn primary" onClick={add} disabled={busy || !name.trim() || phone.replace(/\D/g, '').length < 10}>
             Adicionar
           </button>
@@ -93,7 +114,17 @@ export default function TeamManager({ team, restaurantName }: { team: Member[]; 
           <tbody>
             {team.map((m) => (
               <tr key={m.id} style={{ opacity: m.active ? 1 : 0.5 }}>
-                <td>{m.full_name}<div className="muted" style={{ fontSize: 12 }}>{m.phone}</div></td>
+                <td>
+                  {m.full_name}
+                  <div className="muted" style={{ fontSize: 12 }}>{m.phone}</div>
+                  {(m.cpf || m.pix_key) && (
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      {m.cpf ? `CPF ${m.cpf.replace(/^(d{3})d{5}(d{3})$/, '$1.***.**$2')}` : ''}
+                      {m.cpf && m.pix_key ? ' · ' : ''}
+                      {m.pix_key ? `Pix ${m.pix_key}` : ''}
+                    </div>
+                  )}
+                </td>
                 <td>{m.statusLabel}</td>
                 <td>{m.user_id ? <span className="tag green">ativa</span> : <span className="tag amber">pendente</span>}</td>
                 <td>{m.deliveries_completed}</td>
@@ -105,6 +136,7 @@ export default function TeamManager({ team, restaurantName }: { team: Member[]; 
                       Mandar convite
                     </a>
                   )}
+                  <button className="btn sm" onClick={() => editExtras(m)} style={{ marginRight: 6 }}>CPF/Pix</button>
                   <button className="btn sm" onClick={() => toggle(m.id, m.active)}>{m.active ? 'Desativar' : 'Reativar'}</button>
                 </td>
               </tr>

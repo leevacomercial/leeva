@@ -12,7 +12,7 @@ export default async function EquipePage() {
 
   const { data: team } = await db
     .from('motoboys')
-    .select('id, full_name, phone, status, active, user_id, deliveries_completed, deliveries_late, avg_delay_min, rating, location_updated_at')
+    .select('id, full_name, phone, cpf, pix_key, status, active, user_id, deliveries_completed, deliveries_late, avg_delay_min, rating, location_updated_at')
     .eq('restaurant_id', ctx.restaurantId)
     .eq('fleet', 'own')
     .order('full_name');

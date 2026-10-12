@@ -990,6 +990,7 @@ export type Database = {
           pix_key: string | null
           pix_key_type: string | null
           punctuality_rate: number
+          queue_since: string | null
           push_enabled: boolean
           rating: number
           reliability_index: number
@@ -1036,6 +1037,7 @@ export type Database = {
           pix_key?: string | null
           pix_key_type?: string | null
           punctuality_rate?: number
+          queue_since?: string | null
           push_enabled?: boolean
           rating?: number
           reliability_index?: number
@@ -1082,6 +1084,7 @@ export type Database = {
           pix_key?: string | null
           pix_key_type?: string | null
           punctuality_rate?: number
+          queue_since?: string | null
           push_enabled?: boolean
           rating?: number
           reliability_index?: number
@@ -1985,6 +1988,51 @@ export type Database = {
           phone?: string | null
           settings?: Json
           terms_accepted_version?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      subscription_invoices: {
+        Row: {
+          amount: number
+          created_at: string
+          external_id: string | null
+          id: string
+          invoice_url: string | null
+          paid_at: string | null
+          pix_copy_paste: string | null
+          restaurant_id: string
+          simulated: boolean
+          status: string
+          subscription_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          invoice_url?: string | null
+          paid_at?: string | null
+          pix_copy_paste?: string | null
+          restaurant_id: string
+          simulated?: boolean
+          status?: string
+          subscription_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          invoice_url?: string | null
+          paid_at?: string | null
+          pix_copy_paste?: string | null
+          restaurant_id?: string
+          simulated?: boolean
+          status?: string
+          subscription_id?: string
           updated_at?: string
         }
         Relationships: []

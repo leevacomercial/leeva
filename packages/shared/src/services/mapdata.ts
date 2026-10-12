@@ -49,6 +49,8 @@ export type TeamDriver = {
   position: { latitude: number; longitude: number } | null;
   /** quando o GPS dele chegou por último (ISO) */
   lastSeenAt: string | null;
+  /** posição na fila (1 = próximo a receber); null = fora da fila */
+  queuePos: number | null;
 };
 
 export type MapData = {
@@ -136,7 +138,7 @@ export async function getMapData(db: DB, restaurantId: string): Promise<MapData>
   // equipe própria: todos os motoboys ativos do estabelecimento, online ou não
   const { data: own } = await db
     .from('motoboys')
-    .select('id, full_name, phone, status, current_latitude, current_longitude, location_updated_at')
+    .select('id, full_name, phone, status, current_latitude, current_longitude, location_updated_at, queue_since')
     .eq('restaurant_id', restaurantId)
     .eq('fleet', 'own')
     .eq('active', true)
@@ -148,7 +150,7 @@ export async function getMapData(db: DB, restaurantId: string): Promise<MapData>
       busyCount.set(o.motoboy_id, (busyCount.get(o.motoboy_id) ?? 0) + 1);
     }
   }
-  const team: TeamDriver[] = (own ?? []).map((d) => {
+  const team: (TeamDriver & { queueSince?: string | null })[] = (own ?? []).map((d) => {
     const n = busyCount.get(d.id) ?? 0;
     const online = d.status !== 'offline';
     const fresh = !!d.location_updated_at && now - new Date(d.location_updated_at).getTime() < 5 * 60000;
@@ -163,8 +165,16 @@ export async function getMapData(db: DB, restaurantId: string): Promise<MapData>
           ? { latitude: d.current_latitude as number, longitude: d.current_longitude as number }
           : null,
       lastSeenAt: d.location_updated_at,
+      queuePos: null as number | null,
+      queueSince: d.queue_since,
     };
   });
+  // fila: livres, por ordem de chegada (queue_since)
+  team
+    .filter((d) => d.state === 'free')
+    .sort((a, b) => (a.queueSince ?? '9').localeCompare(b.queueSince ?? '9'))
+    .forEach((d, i) => (d.queuePos = i + 1));
+  for (const d of team) delete (d as { queueSince?: string | null }).queueSince;
 
   return {
     team,
