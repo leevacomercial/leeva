@@ -19,7 +19,7 @@ npm test                        # only packages/shared has unit tests
 
 - Single unit test: `cd packages/shared && npx tsx --test src/__tests__/payout.test.ts`
 - Typecheck one app: `cd apps/motoboy && npx tsc --noEmit` (run it after touching `packages/shared`, all four apps consume it as source — there is no build step for `@leeva/shared`).
-- Integration/E2E scripts hit a **real Supabase** using `apps/restaurante/.env.local`: `npm run test:integration`, `test:fase4`, `test:fase5`, `test:asaas`, etc. (see root `package.json`; each is `scripts/test-*.mjs`). `seed*` scripts are development-only.
+- Integration/E2E scripts hit a **real Supabase** using `apps/restaurante/.env.local`: `npm run test:integration`, `test:fase3`, `test:tracking`, `test:order-hold`, etc. (see root `package.json`; each is `scripts/test-*.mjs`). `seed*` scripts are development-only.
 - `apps/motoboy-app` (Expo): `npm run typecheck` and `npm test` inside that folder. Read `apps/motoboy-app/AGENTS.md` first — Expo SDK 57 differs from what you remember; check https://docs.expo.dev/versions/v57.0.0/.
 
 ## Architecture
@@ -65,3 +65,9 @@ Polling Vercel every few seconds per courier is what blew the Vercel plan. Live 
 - Never read or print secret values.
 - Windows shell: use Git Bash or PowerShell; `python3` hangs; Node needs `C:/...` paths; write multi-line edits to a scratch script instead of `node -e`.
 - The free OpenStreetMap tile server (`tile.openstreetmap.org`) blocks this app ("Access blocked"). The restaurant map (`OsmMapProvider` + restaurant `LeevaMap.tsx`) now uses CARTO tiles; OSM is still hard-coded in `apps/motoboy-app/src/components/{LiveMapMini,RouteMapMini,MapaEntrega}.tsx`, `apps/motoboy/app/(app)/_lib/RouteMap.tsx`, and the admin `LeevaMap.tsx`; replace with a keyed provider (routing already supports `MAPBOX_TOKEN`; a browser-safe public `pk.` token would be needed for tiles) rather than adding more headers — `LiveMapMini` already sends User-Agent/Referer and is still blocked.
+
+## Pending owner actions (as of 2026-10-12)
+
+- Run migrations in the Supabase SQL Editor, in order: 0048–0051 (if not yet applied), 0052 (escalas), 0053 (só frota própria). Before 0053, check `restaurant_credits` for real paid balances to refund.
+- Build a new APK (adds "Minha escala", removes the Carteira tab).
+- Turn off the Asaas webhook if it is still configured.
