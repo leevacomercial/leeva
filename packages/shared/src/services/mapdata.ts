@@ -36,6 +36,8 @@ export type MapOrderMarker = {
   /** id interno do motoboy — liga o ponto de GPS ao vivo (Realtime) ao marcador. */
   motoboyId: string | null;
   driverPosition: { latitude: number; longitude: number } | null;
+  /** ordem da parada na rota do motoboy (route_position, senão group_sequence) */
+  routeOrder: number | null;
 };
 
 /** Motoboy da equipe própria, para o painel "Equipe agora" do mapa. */
@@ -75,7 +77,7 @@ export async function getMapData(db: DB, restaurantId: string): Promise<MapData>
   const { data: orders } = await db
     .from('orders')
     .select(
-      'id, order_number, customer_name, region, status, dispatch_state, dispatch_hold, latitude, longitude, eta_min, eta_max, route_distance_km, created_at, motoboy_id',
+      'id, order_number, customer_name, region, status, dispatch_state, dispatch_hold, latitude, longitude, eta_min, eta_max, route_distance_km, created_at, motoboy_id, route_position, group_sequence',
     )
     .eq('restaurant_id', restaurantId)
     .in('status', OPEN_ORDER_STATUSES)
@@ -132,6 +134,7 @@ export async function getMapData(db: DB, restaurantId: string): Promise<MapData>
       driverFirstName,
       motoboyId: o.motoboy_id && DRIVER_VISIBLE.includes(o.status) ? o.motoboy_id : null,
       driverPosition,
+      routeOrder: o.route_position ?? o.group_sequence ?? null,
     };
   });
 

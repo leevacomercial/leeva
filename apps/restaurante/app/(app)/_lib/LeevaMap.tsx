@@ -22,7 +22,12 @@ export type MapMarker = {
   popupHtml?: string;
   /** mostra o `label` fixo em cima do pino (ex.: nome do motoboy) */
   showLabel?: boolean;
+  /** texto curto DENTRO do pino (ex.: número do pedido) */
+  text?: string;
 };
+
+/** Linha de rota desenhada no mapa (motoboy → coleta → paradas). */
+export type MapLine = { id: string; color: string; points: [number, number][]; dashed?: boolean };
 
 const KIND_COLOR: Record<string, string> = {
   restaurant: '#8fbcff',
@@ -42,8 +47,10 @@ export default function LeevaMap({
   heat,
   center,
   focusId,
+  lines,
 }: {
   markers: MapMarker[];
+  lines?: MapLine[];
   tileUrl?: string;
   attribution?: string;
   className?: string;
@@ -55,6 +62,7 @@ export default function LeevaMap({
   const mapRef = useRef<LMap | null>(null);
   const layerRef = useRef<LayerGroup | null>(null);
   const heatLayerRef = useRef<LayerGroup | null>(null);
+  const linesLayerRef = useRef<LayerGroup | null>(null);
   const markerById = useRef<Map<string, Marker>>(new Map());
   const iconKeyById = useRef<Map<string, string>>(new Map());
   const clickById = useRef<Map<string, () => void>>(new Map());
@@ -71,6 +79,7 @@ export default function LeevaMap({
       mapRef.current = map;
       layerRef.current = L.layerGroup().addTo(map);
       heatLayerRef.current = L.layerGroup().addTo(map);
+      linesLayerRef.current = L.layerGroup().addTo(map);
       draw(L);
       // o container pode ter ganho altura via CSS depois do init
       setTimeout(() => map.invalidateSize(), 120);
@@ -94,7 +103,7 @@ export default function LeevaMap({
       draw(L);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [markers, heat]);
+  }, [markers, heat, lines]);
 
   useEffect(() => {
     if (!focusId) return;
@@ -111,6 +120,22 @@ export default function LeevaMap({
     const heatLayer = heatLayerRef.current;
     if (!map || !layer || !heatLayer) return;
     heatLayer.clearLayers();
+
+    // rotas: redesenha (são poucas linhas — barato) por baixo dos pinos
+    const linesLayer = linesLayerRef.current;
+    if (linesLayer) {
+      linesLayer.clearLayers();
+      for (const ln of lines ?? []) {
+        if (ln.points.length < 2) continue;
+        L.polyline(ln.points, {
+          color: ln.color,
+          weight: 4,
+          opacity: 0.85,
+          dashArray: ln.dashed ? '6 8' : undefined,
+          interactive: false,
+        }).addTo(linesLayer);
+      }
+    }
 
     // heat (círculos translúcidos agregados)
     if (heat?.length) {
@@ -132,15 +157,16 @@ export default function LeevaMap({
     for (const mk of markers) {
       seen.add(mk.id);
       const color = mk.color ?? KIND_COLOR[mk.kind] ?? '#ff5a1f';
-      const size = mk.kind === 'restaurant' ? 30 : mk.kind === 'driver' ? 22 : 26;
+      const size = mk.kind === 'restaurant' ? 30 : mk.kind === 'driver' ? 24 : mk.text ? 30 : 26;
+      const inner = mk.kind === 'restaurant' ? '🏠' : mk.kind === 'driver' ? '🛵' : mk.text ? escapeText(mk.text) : '';
       const icon = L.divIcon({
         className: 'leeva-pin',
         html: `<div style="width:${size}px;height:${size}px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${color};border:2px solid #0b0c0f;box-shadow:0 2px 6px rgba(0,0,0,.5);${mk.late ? 'outline:3px solid #ef4444;outline-offset:1px;' : ''}display:flex;align-items:center;justify-content:center;">
-          <span style="transform:rotate(45deg);font-size:11px;color:#0b0c0f;font-weight:800;">${mk.kind === 'restaurant' ? '🏠' : mk.kind === 'driver' ? '🛵' : ''}</span></div>`,
+          <span style="transform:rotate(45deg);font-size:${mk.text ? 10 : 11}px;color:${mk.kind === 'order' ? '#fff' : '#0b0c0f'};font-weight:800;letter-spacing:-.02em;">${inner}</span></div>`,
         iconSize: [size, size],
         iconAnchor: [size / 2, size],
       });
-      const iconKey = `${mk.kind}|${color}|${size}|${mk.late ? 1 : 0}`;
+      const iconKey = `${mk.kind}|${color}|${size}|${mk.late ? 1 : 0}|${mk.text ?? ''}`;
       let marker = markerById.current.get(mk.id);
       if (!marker) {
         marker = L.marker([mk.lat, mk.lng], { icon }).addTo(layer);
@@ -192,4 +218,8 @@ export default function LeevaMap({
   }
 
   return <div ref={elRef} className={className} />;
+}
+
+function escapeText(t: string) {
+  return t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 }

@@ -435,3 +435,26 @@ button.ops-chip { cursor: pointer; font-family: inherit; }
   .main-area { padding: var(--s4); }
   .container { padding: var(--s5) var(--s4); }
 }
+
+/* ===== AO VIVO em tela cheia (modelo Foody): o mapa é a tela ===== */
+.main-area:has(.ops-full) { padding: 0; max-width: none; }
+.ops-full { position: relative; height: 100vh; min-height: 520px; overflow: hidden; }
+.ops-full-map { position: absolute !important; inset: 0; height: 100% !important; width: 100%; border-radius: 0 !important; z-index: 0; }
+.ops-topbar { position: absolute; top: 12px; left: 372px; right: 12px; z-index: 1000; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; pointer-events: none; }
+.ops-topbar > * { pointer-events: auto; box-shadow: var(--shadow-sm); }
+.ops-live { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); font-size: var(--fs-meta); font-weight: 600; }
+.ops-chip.danger { border-color: var(--danger); } .ops-chip.danger b { color: var(--danger); }
+.ops-panel { position: absolute; top: 12px; left: 12px; bottom: 12px; width: 348px; z-index: 1000; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md, 12px); box-shadow: var(--shadow-md, 0 8px 24px rgba(0,0,0,.25)); padding: 10px; }
+.ops-panel-head { display: flex; gap: 6px; align-items: center; margin-bottom: 10px; }
+.ops-panel-head .seg { display: flex; }
+.ops-panel-head .seg-btn { flex: 1; }
+.ops-panel-toggle { position: absolute; top: 12px; left: 12px; z-index: 1000; padding: 8px 12px; border-radius: 999px; background: var(--brand); color: var(--on-brand); border: 0; font: inherit; font-weight: 650; cursor: pointer; box-shadow: var(--shadow-sm); }
+.ops-panel-toggle + .ops-topbar, .ops-full:has(.ops-panel-toggle) .ops-topbar { left: 12px; top: 56px; }
+.ops-num { flex: none; min-width: 30px; height: 30px; padding: 0 6px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 800; letter-spacing: -.02em; }
+@media (max-width: 860px) {
+  .ops-full { height: auto; overflow: visible; }
+  .ops-full-map { position: relative !important; height: 58vh !important; }
+  .ops-topbar { position: static; padding: 8px; }
+  .ops-panel { position: static; width: auto; margin: 8px; }
+  .ops-panel-toggle { position: static; margin: 8px; }
+}
