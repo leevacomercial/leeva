@@ -10,6 +10,7 @@ type Member = {
   phone: string;
   cpf: string | null;
   pix_key: string | null;
+  invite_code: string | null;
   statusLabel: string;
   active: boolean;
   user_id: string | null;
@@ -23,7 +24,11 @@ type Member = {
 const APK_URL = 'https://leeva-apk-gamma.vercel.app';
 const ACTIVATE_URL = 'https://leeva-motoboy-snowy.vercel.app/ativar';
 
-/** Convite pronto pro WhatsApp do entregador: baixar o app + ativar a conta com o telefone cadastrado. */
+/**
+ * Convite pronto pro WhatsApp do entregador. O link de ativação já leva o
+ * telefone e o CÓDIGO do convite — é o código que liga a conta dele a esta
+ * loja (sem ele ninguém ativa a conta só sabendo o telefone).
+ */
 function inviteLink(m: Member, restaurantName: string): string {
   const digits = m.phone.replace(/\D/g, '');
   const to = digits.length <= 11 ? `55${digits}` : digits;
@@ -32,8 +37,10 @@ function inviteLink(m: Member, restaurantName: string): string {
     `Oi ${first}! Você foi cadastrado como entregador${restaurantName ? ` da ${restaurantName}` : ''} no Leeva. As entregas e a rota chegam pelo app.`,
     '',
     `1) Baixe o app: ${APK_URL}`,
-    `2) Ative sua conta aqui com o telefone ${digits} e crie um e-mail e senha: ${ACTIVATE_URL}`,
+    `2) Ative sua conta (crie um e-mail e senha): ${ACTIVATE_URL}?tel=${digits}&codigo=${m.invite_code ?? ''}`,
+    `   Seu código de convite: ${m.invite_code ?? '—'}`,
     '3) Entre no app com esse e-mail e senha e toque em "Ficar disponível" quando estiver trabalhando.',
+    'Você só vê as entregas desta loja.',
   ].join('\n');
   return `https://wa.me/${to}?text=${encodeURIComponent(text)}`;
 }
@@ -132,9 +139,12 @@ export default function TeamManager({ team, restaurantName }: { team: Member[]; 
                 <td>{Number(m.rating).toFixed(1)}</td>
                 <td style={{ whiteSpace: 'nowrap' }}>
                   {!m.user_id && (
-                    <a className="btn sm primary" href={inviteLink(m, restaurantName)} target="_blank" rel="noreferrer" style={{ marginRight: 6 }}>
-                      Mandar convite
-                    </a>
+                    <>
+                      <a className="btn sm primary" href={inviteLink(m, restaurantName)} target="_blank" rel="noreferrer" style={{ marginRight: 6 }}>
+                        Mandar convite
+                      </a>
+                      {m.invite_code && <span className="muted" style={{ fontSize: 12, marginRight: 6 }}>código {m.invite_code}</span>}
+                    </>
                   )}
                   <button className="btn sm" onClick={() => editExtras(m)} style={{ marginRight: 6 }}>CPF/Pix</button>
                   <button className="btn sm" onClick={() => toggle(m.id, m.active)}>{m.active ? 'Desativar' : 'Reativar'}</button>

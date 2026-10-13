@@ -156,24 +156,36 @@ export function normalizeBairro(s: string | null | undefined): string {
  * endereço (o bairro nem sempre vem separado). Nome mais longo ganha
  * ("Jardim Cidade Universitária" antes de "Cidade Universitária").
  */
-export function findBairroFee(
-  table: { region: string; fee: number }[] | null | undefined,
+export type BairroEntry = { region: string; fee: number; driver_pay?: number | null };
+
+/** A linha da tabela de bairros que vale pra este endereço (ou null). */
+export function findBairroEntry(
+  table: BairroEntry[] | null | undefined,
   region: string | null | undefined,
   address?: string | null,
-): number | null {
+): BairroEntry | null {
   if (!table?.length) return null;
   const r = normalizeBairro(region);
   const addr = ` ${normalizeBairro(address)} `;
   const sorted = [...table].sort((a, b) => b.region.length - a.region.length);
   for (const e of sorted) {
     const n = normalizeBairro(e.region);
-    if (n && n === r) return Math.max(0, e.fee);
+    if (n && n === r) return e;
   }
   for (const e of sorted) {
     const n = normalizeBairro(e.region);
-    if (n && addr.includes(` ${n} `)) return Math.max(0, e.fee);
+    if (n && addr.includes(` ${n} `)) return e;
   }
   return null;
+}
+
+export function findBairroFee(
+  table: BairroEntry[] | null | undefined,
+  region: string | null | undefined,
+  address?: string | null,
+): number | null {
+  const e = findBairroEntry(table, region, address);
+  return e ? Math.max(0, e.fee) : null;
 }
 
 /**
@@ -223,6 +235,8 @@ export type DeliveryCharge = {
   ownFleet: boolean;
   /** taxa de entrega do cliente final pela tabela do estabelecimento */
   customerDeliveryFee: number;
+  /** bairro da tabela que foi usado (null = regra por km) */
+  bairro: string | null;
   breakdown: { label: string; amount: number }[];
 };
 
@@ -261,12 +275,18 @@ export async function computeDeliveryCharge(
     durationMin = leg?.durationMin ?? (distanceKm != null ? minutesForKm(distanceKm) : null);
   }
 
-  const policy = await getPayoutPolicy(db, restaurantId);
-  const payout = computeDriverPayout(policy, { distanceKm });
-  const margin = ownFleet ? 0 : round(await getPlanMargin(db, restaurantId));
-  const total = ownFleet ? 0 : round(payout.total + margin);
   const { DEFAULT_LOGISTICS_CONFIG } = await import('./autodispatch');
   const cfg = { ...DEFAULT_LOGISTICS_CONFIG, ...((rst?.logistics_config as Partial<LogisticsConfig>) ?? {}) };
+  const bairro = findBairroEntry(cfg.customer_fee_by_region, where?.region, where?.address);
+
+  const policy = await getPayoutPolicy(db, restaurantId);
+  // bairro com valor do motoboy definido manda; senão, a regra por km
+  const payout =
+    bairro?.driver_pay != null && Number.isFinite(Number(bairro.driver_pay))
+      ? { total: round(Math.max(0, Number(bairro.driver_pay))), breakdown: [{ label: `Bairro ${bairro.region}`, amount: round(Math.max(0, Number(bairro.driver_pay))) }] }
+      : computeDriverPayout(policy, { distanceKm });
+  const margin = ownFleet ? 0 : round(await getPlanMargin(db, restaurantId));
+  const total = ownFleet ? 0 : round(payout.total + margin);
   const customerDeliveryFee = computeCustomerDeliveryFee(cfg, distanceKm != null ? round(distanceKm) : null, orderAmount, where);
 
   return {
@@ -277,6 +297,7 @@ export async function computeDeliveryCharge(
     total,
     ownFleet,
     customerDeliveryFee,
+    bairro: bairro?.region ?? null,
     breakdown: ownFleet
       ? payout.breakdown
       : [...payout.breakdown, { label: 'Margem Leeva (plano)', amount: margin }],

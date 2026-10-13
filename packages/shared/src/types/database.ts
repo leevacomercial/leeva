@@ -980,6 +980,7 @@ export type Database = {
           fleet: Database["public"]["Enums"]["driver_fleet"]
           full_name: string
           id: string
+          invite_code: string | null
           location_updated_at: string | null
           max_concurrent_deliveries: number
           offers_adequate: number
@@ -1027,6 +1028,7 @@ export type Database = {
           fleet?: Database["public"]["Enums"]["driver_fleet"]
           full_name: string
           id?: string
+          invite_code?: string | null
           location_updated_at?: string | null
           max_concurrent_deliveries?: number
           offers_adequate?: number
@@ -1074,6 +1076,7 @@ export type Database = {
           fleet?: Database["public"]["Enums"]["driver_fleet"]
           full_name?: string
           id?: string
+          invite_code?: string | null
           location_updated_at?: string | null
           max_concurrent_deliveries?: number
           offers_adequate?: number

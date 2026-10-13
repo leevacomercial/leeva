@@ -458,3 +458,12 @@ button.ops-chip { cursor: pointer; font-family: inherit; }
   .ops-panel { position: static; width: auto; margin: 8px; }
   .ops-panel-toggle { position: static; margin: 8px; }
 }
+
+/* Configurações › tabela de taxas por bairro */
+.bairro-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) 36px; gap: 8px; align-items: center; }
+.bairro-head { font-size: var(--fs-label); color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+
+/* Indicadores › filtros e quebras */
+.report-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; align-items: end; }
+.report-filters label { display: grid; gap: 4px; font-size: var(--fs-label); color: var(--muted); }
+.report-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }

@@ -19,6 +19,7 @@ type FeePreview = {
   driverPayout?: number;
   ownFleet?: boolean;
   customerDeliveryFee?: number;
+  bairro?: string | null;
   error?: string;
 };
 
@@ -122,12 +123,14 @@ export default function NewOrderDialog({ onClose, onCreated }: { onClose: () => 
       return;
     }
     let cancelled = false;
-    apiGet<FeePreview>(`/api/delivery-fee?latitude=${lat}&longitude=${lng}`)
+    apiGet<FeePreview>(`/api/delivery-fee?latitude=${lat}&longitude=${lng}&address=${encodeURIComponent(address)}`)
       .then((r) => !cancelled && setFee(r))
       .catch(() => !cancelled && setFee(null));
     return () => {
       cancelled = true;
     };
+    // endereço muda junto com a localização (geocode), não precisa refazer a cada tecla
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lat, lng]);
 
   async function geocode() {
@@ -303,7 +306,7 @@ export default function NewOrderDialog({ onClose, onCreated }: { onClose: () => 
           {/* o Leeva não cobra por entrega — mostra só o que importa pro dono */}
           {fee?.ok && (
             <div className="op-alert info" style={{ marginBottom: 0, fontSize: 13 }}>
-              {fee.distanceKm != null && <><b>{fee.distanceKm} km</b> · </>}
+              {fee.bairro ? <><b>{fee.bairro}</b> (tabela do bairro) · </> : fee.distanceKm != null && <><b>{fee.distanceKm} km</b> · </>}
               seu motoboy recebe <b>{formatCurrencyBRL(fee.driverPayout ?? 0)}</b>
               {fee.customerDeliveryFee != null && <> · taxa pro cliente pela sua tabela: <b>{formatCurrencyBRL(fee.customerDeliveryFee)}</b></>}
             </div>

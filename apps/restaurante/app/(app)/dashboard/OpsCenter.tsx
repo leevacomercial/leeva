@@ -191,6 +191,7 @@ export default function OpsCenter({
         attribution={mapConfig.attribution}
         focusId={focusId}
         className="leaflet-map ops-full-map"
+        fitPadding={panelOpen ? [360, 60] : [0, 60]}
       />
 
       {/* barra de cima: números da operação, de relance */}

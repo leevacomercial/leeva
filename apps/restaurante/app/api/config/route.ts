@@ -91,8 +91,13 @@ export async function POST(req: Request) {
       if (Array.isArray(L.customer_fee_by_region)) {
         const seen = new Set<string>();
         logistics.customer_fee_by_region = (L.customer_fee_by_region as unknown[])
-          .map((e) => e as { region?: unknown; fee?: unknown })
-          .map((e) => ({ region: String(e.region ?? '').trim().slice(0, 60), fee: num(e.fee, 0, 500, 0) }))
+          .map((e) => e as { region?: unknown; fee?: unknown; driver_pay?: unknown })
+          .map((e) => ({
+            region: String(e.region ?? '').trim().slice(0, 60),
+            fee: num(e.fee, 0, 500, 0),
+            // vazio = o motoboy recebe pela regra por km
+            driver_pay: e.driver_pay === null || e.driver_pay === undefined || e.driver_pay === '' ? null : num(e.driver_pay, 0, 500, 0),
+          }))
           .filter((e) => {
             const k = e.region.toLowerCase();
             if (!e.region || seen.has(k)) return false;

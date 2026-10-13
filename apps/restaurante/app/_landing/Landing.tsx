@@ -20,28 +20,32 @@ const DIAS_TESTE = 14;
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const FRASES: { t: ReactNode; s: string }[] = [
-  { t: <>Pedido entrou? <em>O motoboy já sabe.</em></>, s: 'O Leeva manda a entrega pro motoboy livre mais perto, direto no app dele.' },
+  { t: <>Pedido entrou? <em>Vai pro primeiro da fila.</em></>, s: 'Quem ficou livre primeiro recebe a próxima entrega, direto no app. Sem discussão no balcão.' },
   { t: <>Sua equipe <em>no mapa, ao vivo</em>.</>, s: 'Veja quem está livre, quem está em rota e onde cada um está agora.' },
   { t: <>Escala da semana <em>em dois cliques</em>.</>, s: 'Monte os turnos e o Leeva só chama quem está trabalhando.' },
   { t: <>Cliente acompanha <em>sem baixar nada</em>.</>, s: 'Mande o link de rastreio pelo WhatsApp e ele vê o motoboy chegando.' },
   { t: <>Entrega confirmada com <em>código</em>.</>, s: 'O cliente passa 4 dígitos ao motoboy. Pedido do iFood fecha com o localizador.' },
   { t: <>Acerto do motoboy <em>pronto</em>.</>, s: 'Quanto pagar a cada um no fim do dia, já descontado o dinheiro que ele recebeu.' },
+  { t: <>Taxa por bairro, <em>sem conta de cabeça</em>.</>, s: 'Cada bairro com o que o cliente paga e o que o motoboy recebe. O resto vai por km.' },
 ];
 
 const PASSOS = [
   { t: 'O pedido entra', d: 'Do WhatsApp, do seu cardápio, do iFood ou digitado no painel. Confira o ponto no mapa.', ic: 'M4 7h16M4 12h10M4 17h7M17 15l2 2 4-4' },
-  { t: 'O motoboy certo é chamado', d: 'O Leeva escolhe quem da sua equipe está livre, de turno e mais perto. Recusou? Vai pro próximo.', ic: 'M12 3a6 6 0 0 1 6 6c0 4.5-6 12-6 12S6 13.5 6 9a6 6 0 0 1 6-6Zm0 4.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z' },
+  { t: 'O motoboy certo é chamado', d: 'Vai sozinho pro app de quem está livre há mais tempo (a fila). Quer outro? Troque com um toque no mapa.', ic: 'M12 3a6 6 0 0 1 6 6c0 4.5-6 12-6 12S6 13.5 6 9a6 6 0 0 1 6-6Zm0 4.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z' },
   { t: 'Todo mundo acompanha', d: 'Você vê a equipe inteira no mapa ao vivo. O cliente acompanha pelo link.', ic: 'M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Zm9-2.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z' },
   { t: 'Entregue com código', d: 'O cliente passa 4 dígitos, o motoboy confirma e o pedido fecha sozinho.', ic: 'M5 12.5 9.2 16.7 19 7' },
 ];
 
 const RECURSOS: { t: string; d: string; meta: string; dif?: boolean }[] = [
-  { t: 'Despacho automático', d: 'Ninguém precisa ficar escolhendo motoboy. O Leeva chama o melhor da sua equipe e, se ele não aceitar, tenta o próximo. Quer decidir? Mande direto pelo mapa.', meta: 'chama em segundos', dif: true },
+  { t: 'Fila de motoboys', d: 'Ninguém precisa ficar escolhendo motoboy: quem ficou livre primeiro recebe a próxima entrega. Quer decidir? Mande ou troque direto pelo mapa.', meta: 'chama em segundos', dif: true },
   { t: 'Mapa ao vivo da equipe', d: 'Todos os seus motoboys no mapa, com nome: quem está livre, quem está levando o quê e quem sumiu do GPS.', meta: 'tempo real', dif: true },
   { t: 'Escalas e turnos', d: 'Monte a semana, repita na seguinte com um clique e ligue a trava pra só chamar quem está de turno.', meta: 'escala semanal', dif: true },
   { t: 'Rotas agrupadas', d: 'Entregas no mesmo caminho saem juntas, na ordem que roda menos e respeita o prazo de cada cliente.', meta: 'roteirização' },
   { t: 'Rastreio para o cliente', d: 'Link de acompanhamento sem precisar baixar nada. Menos cliente ligando pra perguntar do pedido.', meta: 'link no WhatsApp' },
-  { t: 'Acerto dos motoboys', d: 'Você define quanto paga por km. O Leeva soma as entregas de cada um e desconta o dinheiro que ele recebeu do cliente.', meta: 'por motoboy' },
+  { t: 'Taxa por bairro', d: 'Cadastre seus bairros com o valor do cliente e o do motoboy na mesma linha. Bairro fora da lista vai pela regra por km.', meta: 'cliente · motoboy', dif: true },
+  { t: 'Acerto dos motoboys', d: 'O Leeva soma as entregas de cada um pela sua tabela e desconta o dinheiro que ele recebeu do cliente.', meta: 'por motoboy' },
+  { t: 'Relatórios com filtro', d: 'Filtre por data, motoboy, forma de pagamento e bairro. Veja totais, tempo médio e baixe a planilha.', meta: 'planilha' },
+  { t: 'Convite pelo WhatsApp', d: 'Cadastre o motoboy com nome e telefone e mande o convite: link do app e código pra ativar. Ele só vê as entregas da sua loja.', meta: 'convite com código' },
   { t: 'Chat com o motoboy', d: 'Fale com quem está levando o pedido direto do painel, ou chame no WhatsApp dele.', meta: 'chat · WhatsApp' },
   { t: 'Pedidos do iFood e cardápios', d: 'Use sua equipe nos pedidos do iFood (entrega própria) e cole pedidos de qualquer cardápio digital.', meta: 'iFood · Anota AI' },
 ];
@@ -50,7 +54,9 @@ const FAQ = [
   { q: 'Quanto custa?', a: `Uma mensalidade de ${brl(MENSALIDADE)}, com ${DIAS_TESTE} dias grátis pra testar. Não tem taxa por entrega nem porcentagem sobre a sua venda.` },
   { q: 'Preciso ter motoboy?', a: 'Sim. O Leeva organiza a SUA equipe: você cadastra seus motoboys, eles baixam o app e as entregas chegam pra eles. Você paga eles direto, do jeito que já paga hoje.' },
   { q: 'E o pagamento dos motoboys?', a: 'Continua com você. O Leeva calcula quanto cada um fez no dia pela tabela que você definir e já desconta o dinheiro que ele recebeu de cliente.' },
-  { q: 'E se nenhum motoboy aceitar?', a: 'A oferta passa automaticamente para o próximo livre. Se ninguém puder, o painel te avisa na hora e você pode mandar direto pra alguém.' },
+  { q: 'Como o motoboy entra no app?', a: 'Você cadastra ele com nome e telefone e toca em "Mandar convite". Chega no WhatsApp dele o link do app e um código; ele cria e-mail e senha e pronto. A conta dele fica ligada só à sua loja.' },
+  { q: 'Como funciona a fila?', a: 'Quem ficou disponível (ou terminou a última entrega) primeiro recebe o próximo pedido. Entregas perto uma da outra podem sair juntas com o mesmo motoboy. Você pode trocar o motoboy de qualquer pedido pelo mapa.' },
+  { q: 'Como fica a taxa de entrega?', a: 'Você monta a tabela por bairro: quanto o cliente paga e quanto o motoboy recebe em cada um. Bairro que não estiver na lista usa a regra por km que você definir.' },
   { q: 'Preciso instalar alguma coisa?', a: 'Não. O painel funciona no navegador do computador ou do celular. Quem usa aplicativo é o motoboy.' },
   { q: 'Tem fidelidade?', a: 'Não. Você pode cancelar quando quiser.' },
 ];
@@ -162,13 +168,13 @@ export default function Landing() {
           </svg>
           <div className={`${styles.wrap} ${styles.heroGrid}`}>
             <div>
-              <p className={styles.eyebrow}>Entregas para comércios · João Pessoa</p>
+              <p className={styles.eyebrow}>Para lojas com motoboy próprio · João Pessoa</p>
               <h1 className={styles.h1}>
                 Sua equipe de motoboys, <em>organizada sozinha.</em>
               </h1>
               <p className={styles.lead}>
-                O Leeva manda cada pedido pro motoboy certo da sua equipe, mostra todo mundo no mapa ao vivo, monta as rotas e
-                fecha a entrega com código. Mensalidade fixa, sem taxa por entrega.
+                Cada pedido vai sozinho pro primeiro da fila, você vê a equipe inteira no mapa ao vivo, as rotas se montam e o
+                acerto de cada motoboy sai pronto. Mensalidade fixa, sem taxa por entrega.
               </p>
               <div className={styles.ctas}>
                 <Link href="/signup" className={`${styles.btn} ${styles.btnVerde} ${styles.pulsa}`}>
@@ -353,7 +359,7 @@ export default function Landing() {
 
       <footer className={styles.rodape}>
         <div className={styles.wrap}>
-          <span>© 2026 Leeva · Logística de entregas para comércios</span>
+          <span>© 2026 Leeva · Organização de entregas com motoboy próprio</span>
           <span className={styles.rodapeLinks}>
             <Link href="/login">Entrar</Link>
             <span>João Pessoa, PB</span>

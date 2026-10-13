@@ -9,8 +9,8 @@ const c = (k: string): string => styles[k] ?? '';
 /** [classe, texto, espera em ms antes do próximo] — a entrega do celular da demo. */
 const ROTEIRO: [('sis' | 'evt' | 'ok' | 'wait'), string, number][] = [
   ['sis', 'Nova entrega · Maria S. · 2,8 km', 1100],
-  ['wait', 'Chamando o motoboy livre mais perto…', 1900],
-  ['evt', 'João aceitou · está a 1,2 km da loja', 1700],
+  ['wait', 'Mandando pro primeiro da fila…', 1900],
+  ['evt', 'João (1º da fila) confirmou no app · a 1,2 km da loja', 1700],
   ['evt', 'João chegou na loja', 1500],
   ['evt', 'Pedido coletado · link de rastreio enviado à cliente', 1800],
   ['evt', 'A caminho · chega em 6 min', 2000],

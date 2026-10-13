@@ -81,7 +81,10 @@ export async function POST(req: Request) {
     const extras = optionalExtras(b);
     if (!extras.ok) return badRequest(extras.error);
 
+    // código do convite (6 números): é o que liga a conta do motoboy a ESTA loja
+    const inviteCode = String(Math.floor(100000 + Math.random() * 900000));
     await db.from('motoboys').insert({
+      invite_code: inviteCode,
       restaurant_id: ctx.restaurantId,
       fleet: 'own',
       full_name: name.slice(0, 120),

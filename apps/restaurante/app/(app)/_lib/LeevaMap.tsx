@@ -48,9 +48,12 @@ export default function LeevaMap({
   center,
   focusId,
   lines,
+  fitPadding,
 }: {
   markers: MapMarker[];
   lines?: MapLine[];
+  /** folga ao enquadrar: [esquerda, topo] em px (ex.: painel flutuante por cima do mapa) */
+  fitPadding?: [number, number];
   tileUrl?: string;
   attribution?: string;
   className?: string;
@@ -209,7 +212,11 @@ export default function LeevaMap({
     // enquadra na primeira vez e quando aparece pedido novo — não a cada GPS
     if (!fitted.current || newFixedPoint) {
       if (pts.length > 1) {
-        map.fitBounds(pts as [number, number][], { padding: [40, 40], maxZoom: 15 });
+        map.fitBounds(pts as [number, number][], {
+          paddingTopLeft: fitPadding ? [fitPadding[0] + 30, fitPadding[1] + 30] : [40, 40],
+          paddingBottomRight: [40, 40],
+          maxZoom: 15,
+        });
       } else if (pts.length === 1) {
         map.setView(pts[0]!, 14);
       }
