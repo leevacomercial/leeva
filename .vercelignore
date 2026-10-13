@@ -1,0 +1,7 @@
+# não sobe build local, dependências nem o app nativo pra Vercel
+**/.next
+**/node_modules
+**/.turbo
+apps/motoboy-app
+apps/restaurante/scratch
+**/.env*
