@@ -253,3 +253,102 @@ export const IFOOD_EVENT_NEW_ORDER = 'PLC';
 export const IFOOD_EVENT_CONCLUDED = 'CON';
 /** Pedido cancelado no iFood. */
 export const IFOOD_EVENT_CANCELLED = 'CAN';
+
+// ---------------------------------------------------------------------------
+// MÓDULO MERCHANT (homologação): loja, disponibilidade, pausas e horário.
+// Tudo em /merchant/v1.0/merchants/{merchantId}/…
+// ---------------------------------------------------------------------------
+
+async function merchantReq<T>(
+  token: string,
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  const res = await fetch(`${BASE}/merchant/v1.0/merchants${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${token}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (res.status === 204 || res.status === 202) return null as T;
+  const json = await res.json().catch(() => null);
+  if (!res.ok) {
+    const msg = (json as { message?: string; error?: { message?: string } } | null)?.message ?? (json as { error?: { message?: string } } | null)?.error?.message;
+    throw new IfoodApiError(`iFood ${method} ${path} falhou (${res.status})${msg ? `: ${msg}` : ''}`, res.status, json);
+  }
+  return json as T;
+}
+
+/** Detalhes completos da loja (nome, razão social, endereço, operações…). */
+export function getIfoodMerchant(token: string, merchantId: string) {
+  return merchantReq<Record<string, unknown>>(token, 'GET', `/${merchantId}`);
+}
+
+export type IfoodMerchantStatus = {
+  operation?: string;
+  salesChannel?: string;
+  available?: boolean;
+  state?: string; // OK | WARNING | CLOSED | ERROR
+  message?: { title?: string; subtitle?: string; description?: string } | null;
+  validations?: { id?: string; code?: string; state?: string; message?: { title?: string; subtitle?: string } }[];
+  reopenable?: unknown;
+};
+
+/** Disponibilidade da loja (aberta/fechada e por quê), por operação/canal. */
+export async function getIfoodMerchantStatus(token: string, merchantId: string): Promise<IfoodMerchantStatus[]> {
+  const r = await merchantReq<IfoodMerchantStatus[] | IfoodMerchantStatus>(token, 'GET', `/${merchantId}/status`);
+  return Array.isArray(r) ? r : r ? [r] : [];
+}
+
+export type IfoodInterruption = { id: string; description?: string; start: string; end: string };
+
+export async function listIfoodInterruptions(token: string, merchantId: string): Promise<IfoodInterruption[]> {
+  const r = await merchantReq<IfoodInterruption[]>(token, 'GET', `/${merchantId}/interruptions`);
+  return Array.isArray(r) ? r : [];
+}
+
+/** Cria uma pausa. start/end em ISO com fuso (ex.: 2026-10-13T14:00:00-03:00); máx. 7 dias. */
+export function createIfoodInterruption(
+  token: string,
+  merchantId: string,
+  input: { description: string; start: string; end: string },
+) {
+  return merchantReq<IfoodInterruption>(token, 'POST', `/${merchantId}/interruptions`, {
+    description: input.description.slice(0, 255),
+    start: input.start,
+    end: input.end,
+  });
+}
+
+export async function deleteIfoodInterruption(token: string, merchantId: string, interruptionId: string): Promise<void> {
+  try {
+    await merchantReq(token, 'DELETE', `/${merchantId}/interruptions/${interruptionId}`);
+  } catch (e) {
+    if (e instanceof IfoodApiError && e.status === 404) return; // já não existe
+    throw e;
+  }
+}
+
+export type IfoodDay = 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
+export type IfoodShift = { id?: string; dayOfWeek: IfoodDay; start: string; duration: number };
+
+/** Horário configurado. O iFood devolve [{ storeId, shifts: [...] }] (aceita também { shifts }). */
+export async function getIfoodOpeningHours(token: string, merchantId: string): Promise<IfoodShift[]> {
+  const r = await merchantReq<unknown>(token, 'GET', `/${merchantId}/opening-hours`);
+  const list = Array.isArray(r) ? r : r ? [r] : [];
+  const out: IfoodShift[] = [];
+  for (const c of list as { shifts?: IfoodShift[]; dayOfWeek?: IfoodDay }[]) {
+    if (Array.isArray(c?.shifts)) out.push(...c.shifts);
+    else if (c?.dayOfWeek) out.push(c as unknown as IfoodShift);
+  }
+  return out;
+}
+
+/** Substitui TODOS os turnos da loja (start "HH:MM:SS", duration em minutos). */
+export function putIfoodOpeningHours(token: string, merchantId: string, shifts: IfoodShift[]) {
+  return merchantReq<unknown>(token, 'PUT', `/${merchantId}/opening-hours`, {
+    storeId: merchantId,
+    shifts: shifts.map((s) => ({ dayOfWeek: s.dayOfWeek, start: s.start, duration: s.duration })),
+  });
+}

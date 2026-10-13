@@ -2,6 +2,7 @@ import { requireRestaurantContext } from '@/lib/context';
 import { ConnectMenu } from './ConnectMenu';
 import { OpenDeliveryCard } from './OpenDeliveryCard';
 import { IfoodLink } from './IfoodLink';
+import { IfoodLoja } from './IfoodLoja';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +39,8 @@ export default async function IntegracoesPage() {
       <ConnectMenu deliveriesUrl={deliveriesUrl} />
 
       <OpenDeliveryCard baseUrl={base} />
+
+      <IfoodLoja />
 
       <IfoodLink />
     </div>
