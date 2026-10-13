@@ -34,8 +34,8 @@ const KIND_COLOR: Record<string, string> = {
  */
 export default function LeevaMap({
   markers,
-  tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-  attribution = '© OpenStreetMap',
+  tileUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+  attribution = 'Tiles © Esri',
   className = 'leaflet-map ops-map',
   heat,
   center,

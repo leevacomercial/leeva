@@ -75,11 +75,10 @@ export default function LiveMap({ height = 340 }: { height?: number }) {
       const ty = ty0 + j;
       if (ty < 0 || ty >= nTiles) continue;
       const wx = ((tx % nTiles) + nTiles) % nTiles;
-      const sub = 'abc'[(tx + ty) % 3];
       tiles.push({
         key: `${tx}-${ty}`,
-        // OSM padrão (sem chave) — o CARTO passou a exigir API key.
-        src: `https://${sub}.tile.openstreetmap.org/${z}/${wx}/${ty}.png`,
+        // Esri (sem chave): OSM bloqueia o app e o CARTO passou a exigir API key.
+        src: `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${z}/${ty}/${wx}`,
         left: tx * TILE - originX,
         top: ty * TILE - originY,
       });
