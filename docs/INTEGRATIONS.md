@@ -277,3 +277,22 @@ node --import tsx --env-file=apps/restaurante/.env.local scripts/test-ifood-sand
 # abrir o link, autorizar no Portal do Parceiro, depois:
 node --import tsx --env-file=apps/restaurante/.env.local scripts/test-ifood-sandbox.mjs complete
 ```
+
+### 17/10/2026 — o módulo certo pro Leeva é LOGISTICS (não Order)
+
+Lido no developer.ifood.com.br (precisa de navegador logado; bloqueia robô):
+- **Order** (homologação automática pelo wizard) é só pra apps da categoria
+  **PDV**: confirmar pedido em 8 min, cancelar com motivos, readyToPickup,
+  dispatch, exibir bandeira/troco/cupom/CPF. Não é o papel do Leeva.
+- **Logistics** é pra "plataformas de terceiros que gerenciam entregas para
+  múltiplos merchants" — exatamente o Leeva. Fluxo:
+  polling `/events/v1.0/events:polling?excludeHeartbeat=true` (30 s) + ack
+  `/events/v1.0/events:acknowledgement` `{acknowledgements:[{id,status:200}]}`
+  → `GET /logistics/v1.0/orders/{id}` → `POST assignDriver {workerName, workerPhone, workerVehicleType}`
+  → `goingToOrigin` → `arrivedAtOrigin` → `dispatch` → `arrivedAtDestination`
+  → evento `DELIVERY_DROP_CODE_REQUESTED` (DDCR) → `POST verifyDeliveryCode` (422 = código errado).
+  Operações retornam 202 (resultado chega por evento); 409 fora de sequência.
+- Homologação Logistics: chamado "Solicitação de Homologação - Logistics API"
+  (app, merchant ID da loja de teste, contato) → sessão remota de 45–60 min
+  com o analista (fluxo completo + token expirado + 429 + erros). **Reprovou =
+  esperar 15 dias.** Exige CNPJ, interface de entregador, dashboard, logs.
