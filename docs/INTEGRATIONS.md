@@ -313,3 +313,18 @@ Lido no developer.ifood.com.br (precisa de navegador logado; bloqueia robô):
   repete 1x. Tudo que sai fica em `integration_events` (direction outbound).
 - App do motoboy (PWA e nativo): loja com iFood vinculado → campo "Código de
   entrega do iFood" no lugar do link externo. Migration 0056.
+
+### Teste de ponta a ponta no sandbox — 17/10/2026 (app "Teste (C)", loja 4096508)
+- Pedido gerado em Developer Portal › Pedidos de teste → evento PLC → GET
+  /logistics/orders OK (deliveredBy MERCHANT) → entrou no Leeva → motoboy →
+  assignDriver, goingToOrigin, arrivedAtOrigin, dispatch, arrivedAtDestination
+  = 202 nas 5 → evento DDCR (pediu código) → Leeva bloqueou fechar sem código
+  → código errado: verifyDeliveryCode 400 "Confirmation code is invalid" →
+  mensagem pro motoboy. Cancelamento (CAN) também fecha no Leeva.
+- O iFood cancela o pedido de teste se a loja estiver FECHADA ("O pedido não
+  foi enviado para a Loja", 901) ou se ninguém confirmar em 8 min. No real
+  quem abre/confirma é o PDV/Gestor da loja; no teste use
+  `scripts/simula-loja-ifood.ts` (polling com heartbeat + confirm).
+- Ack certo: POST /events/v1.0/events/acknowledgment [{id}] (202).
+- Falta testar o código CERTO: o código do pedido de teste aparece pro
+  "cliente" (usuário de testes do portal) — ver no app iFood desse usuário.

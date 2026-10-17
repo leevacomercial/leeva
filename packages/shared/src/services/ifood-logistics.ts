@@ -225,6 +225,19 @@ export async function syncIfoodLogistics(db: DB, restaurantId: string): Promise<
     for (const f of failed ?? []) {
       const evt = f.payload as unknown as { orderId?: string; code: string; fullCode?: string; id: string };
       if (!evt?.orderId || IFOOD_LOGISTICS_EVENT.isCancelled(evt) || IFOOD_LOGISTICS_EVENT.isConcluded(evt) || IFOOD_LOGISTICS_EVENT.isCodeRequested(evt)) continue;
+      // o iFood já cancelou/concluiu esse pedido? então não traz de volta
+      const { data: closed } = await db
+        .from('integration_events')
+        .select('id')
+        .eq('provider', 'ifood')
+        .eq('restaurant_id', restaurantId)
+        .in('payload->>code', ['CAN', 'CON'])
+        .eq('payload->>orderId', evt.orderId)
+        .limit(1);
+      if (closed?.length) {
+        await db.from('integration_events').update({ status: 'ignored', error: 'pedido já cancelado/concluído no iFood' }).eq('provider', 'ifood').eq('event_id', f.event_id ?? '');
+        continue;
+      }
       try {
         const r = await importIfoodOrder(db, restaurantId, evt.orderId, autoCall);
         if (r) out.imported++;
