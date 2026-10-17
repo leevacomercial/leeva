@@ -54,6 +54,9 @@ export async function createOrderFromNormalized(
     /** entra "segurado": aparece no painel/mapa, mas não despacha até o
      *  restaurante clicar "Chamar entregador". */
     holdForReview?: boolean;
+    /** pedido de canal externo que não pode ser recusado (iFood Logistics):
+     *  entra mesmo sem achar o endereço no mapa, com aviso nas observações. */
+    allowNoLocation?: boolean;
   } = {},
 ): Promise<CreateResult> {
   // --- idempotência ---
@@ -81,7 +84,7 @@ export async function createOrderFromNormalized(
   // As rotas de API validam o endereço ANTES (services/address.ts) e chegam
   // aqui já com a coordenada. Rascunhos de WhatsApp (confirmação humana
   // pendente) são a única exceção.
-  if (!opts.requireConfirmation && lat == null) {
+  if (!opts.requireConfirmation && !opts.allowNoLocation && lat == null) {
     return {
       ok: false,
       error: 'Não conseguimos localizar o endereço de entrega. Confira a rua, o número e o bairro e tente de novo.',

@@ -105,6 +105,43 @@ export type IfoodLogisticsSyncResult = {
   errors: string[];
 };
 
+/**
+ * Busca o pedido no iFood e cria a entrega no Leeva (se ainda não existe).
+ * Pedido do iFood NÃO pode ser recusado por endereço — a entrega existe: se o
+ * mapa não achar (ou vier 0,0), entra sem o ponto e com aviso nas observações.
+ * Devolve o id da entrega criada (null se já existia).
+ */
+async function importIfoodOrder(db: DB, restaurantId: string, ifoodOrderId: string, autoCall: boolean): Promise<string | null> {
+  const { data: have } = await db
+    .from('orders')
+    .select('id')
+    .eq('restaurant_id', restaurantId)
+    .eq('source', 'ifood')
+    .eq('external_id', ifoodOrderId)
+    .maybeSingle();
+  if (have) return null;
+  const raw = await withToken(db, restaurantId, (t) => getIfoodLogisticsOrder(t, ifoodOrderId));
+  const parsed = logisticsOrderToNormalized(raw);
+  if (!parsed.ok) throw new Error(parsed.error);
+  const a = parsed.order.address;
+  if (a.latitude === 0 && a.longitude === 0) {
+    a.latitude = null;
+    a.longitude = null;
+  }
+  const hasCoords = isValidLatLng(a.latitude, a.longitude);
+  const loc = await resolveAndApplyDeliveryLocation(db, restaurantId, parsed.order, { confirmed: hasCoords });
+  if (!loc.ok) {
+    a.latitude = null;
+    a.longitude = null;
+    parsed.order.notes = [`⚠ Endereço não localizado no mapa (${deliveryLocationErrorMessage(loc.reason)}) — confira com o cliente`, parsed.order.notes]
+      .filter(Boolean)
+      .join(' · ');
+  }
+  const created = await createOrderFromNormalized(db, restaurantId, parsed.order, { holdForReview: !autoCall, allowNoLocation: true });
+  if (!created.ok) throw new Error(created.error);
+  return created.duplicate ? null : created.orderId;
+}
+
 /** Um ciclo completo pra UM restaurante vinculado: eventos + etapas pendentes. */
 export async function syncIfoodLogistics(db: DB, restaurantId: string): Promise<IfoodLogisticsSyncResult> {
   const out: IfoodLogisticsSyncResult = { ok: true, polled: 0, imported: 0, stepsSent: 0, errors: [] };
@@ -150,36 +187,9 @@ export async function syncIfoodLogistics(db: DB, restaurantId: string): Promise<
           await closeIfoodOrder(db, restaurantId, evt.orderId, IFOOD_LOGISTICS_EVENT.isCancelled(evt) ? 'cancelled' : 'concluded');
         } else {
           // qualquer outro evento de um pedido que ainda não temos = pedido novo
-          const { data: have } = await db
-            .from('orders')
-            .select('id')
-            .eq('restaurant_id', restaurantId)
-            .eq('source', 'ifood')
-            .eq('external_id', evt.orderId)
-            .maybeSingle();
-          if (!have) {
-            const raw = await withToken(db, restaurantId, (t) => getIfoodLogisticsOrder(t, evt.orderId!));
-            const parsed = logisticsOrderToNormalized(raw);
-            if (!parsed.ok) throw new Error(parsed.error);
-            // pedido do iFood NÃO pode ser recusado por endereço: a entrega existe.
-            // Se o mapa não achar (ou vier 0,0), entra sem o ponto e com aviso.
-            const a = parsed.order.address;
-            if (a.latitude === 0 && a.longitude === 0) {
-              a.latitude = null;
-              a.longitude = null;
-            }
-            const hasCoords = isValidLatLng(a.latitude, a.longitude);
-            const loc = await resolveAndApplyDeliveryLocation(db, restaurantId, parsed.order, { confirmed: hasCoords });
-            if (!loc.ok) {
-              a.latitude = null;
-              a.longitude = null;
-              parsed.order.notes = [`⚠ Endereço não localizado no mapa (${deliveryLocationErrorMessage(loc.reason)}) — confira com o cliente`, parsed.order.notes]
-                .filter(Boolean)
-                .join(' · ');
-            }
-            const created = await createOrderFromNormalized(db, restaurantId, parsed.order, { holdForReview: !autoCall });
-            if (!created.ok) throw new Error(created.error);
-            await db.from('integration_events').update({ order_id: created.orderId }).eq('provider', 'ifood').eq('event_id', evt.id);
+          const createdId = await importIfoodOrder(db, restaurantId, evt.orderId, autoCall);
+          if (createdId) {
+            await db.from('integration_events').update({ order_id: createdId }).eq('provider', 'ifood').eq('event_id', evt.id);
             out.imported++;
           }
         }
@@ -194,10 +204,37 @@ export async function syncIfoodLogistics(db: DB, restaurantId: string): Promise<
       }
     }
     // confirma TODOS os eventos buscados (inclusive os que falharam aqui — o
-    // pedido é buscado de novo pelo id se precisar)
+    // pedido é buscado de novo pelo id na próxima tentativa, abaixo)
     if (events.length) await withToken(db, restaurantId, (t) => ackIfoodLogisticsEvents(t, events.map((e) => e.id)));
   } catch (e) {
     out.errors.push(`eventos: ${(e as Error).message}`);
+  }
+
+  // 1b. pedido novo que falhou nas últimas 6 h (já confirmado ao iFood, então
+  //     não volta no polling): tenta importar de novo pelo id, no máx. 5 por ciclo
+  try {
+    const { data: failed } = await db
+      .from('integration_events')
+      .select('event_id, payload')
+      .eq('restaurant_id', restaurantId)
+      .eq('provider', 'ifood')
+      .eq('direction', 'inbound')
+      .eq('status', 'failed')
+      .gte('created_at', new Date(Date.now() - 6 * 3600_000).toISOString())
+      .limit(5);
+    for (const f of failed ?? []) {
+      const evt = f.payload as unknown as { orderId?: string; code: string; fullCode?: string; id: string };
+      if (!evt?.orderId || IFOOD_LOGISTICS_EVENT.isCancelled(evt) || IFOOD_LOGISTICS_EVENT.isConcluded(evt) || IFOOD_LOGISTICS_EVENT.isCodeRequested(evt)) continue;
+      try {
+        const r = await importIfoodOrder(db, restaurantId, evt.orderId, autoCall);
+        if (r) out.imported++;
+        await db.from('integration_events').update({ status: 'processed', error: null, processed_at: new Date().toISOString(), order_id: r }).eq('provider', 'ifood').eq('event_id', f.event_id ?? '');
+      } catch (e) {
+        await db.from('integration_events').update({ error: `(nova tentativa) ${(e as Error).message}`.slice(0, 300) }).eq('provider', 'ifood').eq('event_id', f.event_id ?? '');
+      }
+    }
+  } catch {
+    /* nova tentativa nunca derruba o ciclo */
   }
 
   // 2. etapas pendentes
