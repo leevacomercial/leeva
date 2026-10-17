@@ -134,9 +134,13 @@ export async function syncIfoodLogistics(db: DB, restaurantId: string): Promise<
           payload: evt as unknown as Json,
         });
         if (dup) {
-          if (dup.code === '23505') continue; // já tratado (deduplicação)
-          out.errors.push(`evento ${evt.id}: ${dup.message}`);
-          continue;
+          if (dup.code !== '23505') {
+            out.errors.push(`evento ${evt.id}: ${dup.message}`);
+            continue;
+          }
+          // já visto: só reprocessa se da outra vez falhou (deduplicação)
+          const { data: prev } = await db.from('integration_events').select('status').eq('provider', 'ifood').eq('event_id', evt.id).maybeSingle();
+          if (prev?.status !== 'failed') continue;
         }
         if (!evt.orderId) continue;
 
@@ -157,9 +161,22 @@ export async function syncIfoodLogistics(db: DB, restaurantId: string): Promise<
             const raw = await withToken(db, restaurantId, (t) => getIfoodLogisticsOrder(t, evt.orderId!));
             const parsed = logisticsOrderToNormalized(raw);
             if (!parsed.ok) throw new Error(parsed.error);
-            const hasCoords = isValidLatLng(parsed.order.address.latitude, parsed.order.address.longitude);
+            // pedido do iFood NÃO pode ser recusado por endereço: a entrega existe.
+            // Se o mapa não achar (ou vier 0,0), entra sem o ponto e com aviso.
+            const a = parsed.order.address;
+            if (a.latitude === 0 && a.longitude === 0) {
+              a.latitude = null;
+              a.longitude = null;
+            }
+            const hasCoords = isValidLatLng(a.latitude, a.longitude);
             const loc = await resolveAndApplyDeliveryLocation(db, restaurantId, parsed.order, { confirmed: hasCoords });
-            if (!loc.ok) throw new Error(deliveryLocationErrorMessage(loc.reason));
+            if (!loc.ok) {
+              a.latitude = null;
+              a.longitude = null;
+              parsed.order.notes = [`⚠ Endereço não localizado no mapa (${deliveryLocationErrorMessage(loc.reason)}) — confira com o cliente`, parsed.order.notes]
+                .filter(Boolean)
+                .join(' · ');
+            }
             const created = await createOrderFromNormalized(db, restaurantId, parsed.order, { holdForReview: !autoCall });
             if (!created.ok) throw new Error(created.error);
             await db.from('integration_events').update({ order_id: created.orderId }).eq('provider', 'ifood').eq('event_id', evt.id);

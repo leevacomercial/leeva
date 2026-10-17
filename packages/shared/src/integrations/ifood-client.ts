@@ -357,7 +357,8 @@ export function putIfoodOpeningHours(token: string, merchantId: string, shifts: 
 // MÓDULO LOGISTICS — o Leeva como plataforma de logística da loja.
 // Doc: developer.ifood.com.br › Restaurante › Módulos › Logistics.
 //   eventos:  GET  /events/v1.0/events:polling?excludeHeartbeat=true  (≥ 30 s)
-//             POST /events/v1.0/events:acknowledgement {acknowledgements:[{id,status:200}]}
+//             POST /events/v1.0/events/acknowledgment  [{id}]   (testado no sandbox em 17/10:
+//             202; a grafia "events:acknowledgement" da página de homologação dá 404)
 //   pedido:   GET  /logistics/v1.0/orders/{id}
 //   etapas:   POST /logistics/v1.0/orders/{id}/{assignDriver|goingToOrigin|arrivedAtOrigin|dispatch|arrivedAtDestination}
 //   código:   POST /logistics/v1.0/orders/{id}/verifyDeliveryCode {code}
@@ -413,10 +414,10 @@ export async function pollIfoodLogisticsEvents(token: string, merchantIds?: stri
 export async function ackIfoodLogisticsEvents(token: string, eventIds: string[]): Promise<void> {
   for (let i = 0; i < eventIds.length; i += 2000) {
     const chunk = eventIds.slice(i, i + 2000);
-    const res = await ifoodFetch(`${BASE}/events/v1.0/events:acknowledgement`, {
+    const res = await ifoodFetch(`${BASE}/events/v1.0/events/acknowledgment`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ acknowledgements: chunk.map((id) => ({ id, status: 200 })) }),
+      body: JSON.stringify(chunk.map((id) => ({ id }))),
     });
     if (!res.ok && res.status !== 202) {
       const body = await res.json().catch(() => null);
