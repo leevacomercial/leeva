@@ -1,6 +1,6 @@
 import { getMotoboyContextFromReq, adminDb } from '@/lib/context';
 import { json, unauthorized, serverError } from '@/lib/api';
-import { getActiveTerms, needsTermsAcceptance } from '@leeva/shared/services';
+import { getActiveTerms, needsTermsAcceptance, isIfoodLogisticsLinked } from '@leeva/shared/services';
 
 /**
  * Perfil do motoboy para o app nativo — inclui o estado de aprovação e se
@@ -36,6 +36,8 @@ export async function GET(req: Request) {
       pixKeyType: m?.pix_key_type ?? null,
       city: m?.city ?? null,
       pushEnabled: !!m?.push_enabled,
+      // loja com iFood integrado (módulo Logistics): o código de entrega do iFood é digitado no app
+      ifoodLogistics: ctx.restaurantId ? await isIfoodLogisticsLinked(db, ctx.restaurantId) : false,
       terms: needsTerms && terms ? { version: terms.version, content: terms.content } : null,
     });
   } catch (e) {

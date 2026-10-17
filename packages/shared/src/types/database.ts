@@ -1415,6 +1415,8 @@ export type Database = {
           group_lead: boolean
           group_sequence: number | null
           id: string
+          ifood_code_required: boolean
+          ifood_logistics_step: string | null
           in_route_at: string | null
           latitude: number | null
           leeva_fee: number | null
@@ -1474,6 +1476,8 @@ export type Database = {
           group_lead?: boolean
           group_sequence?: number | null
           id?: string
+          ifood_code_required?: boolean
+          ifood_logistics_step?: string | null
           in_route_at?: string | null
           latitude?: number | null
           leeva_fee?: number | null
@@ -1533,6 +1537,8 @@ export type Database = {
           group_lead?: boolean
           group_sequence?: number | null
           id?: string
+          ifood_code_required?: boolean
+          ifood_logistics_step?: string | null
           in_route_at?: string | null
           latitude?: number | null
           leeva_fee?: number | null

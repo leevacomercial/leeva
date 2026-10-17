@@ -1,6 +1,6 @@
 import { adminDb } from '@/lib/context';
 import { json, serverError, badRequest } from '@/lib/api';
-import { syncIfoodOrders, captureError, checkRateLimit } from '@leeva/shared/services';
+import { syncIfoodLogistics, captureError, checkRateLimit } from '@leeva/shared/services';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -37,7 +37,8 @@ export async function POST(req: Request) {
   if (!rl.allowed) return json({ ok: true, skipped: true, reason: 'rate_limited' });
 
   try {
-    const result = await syncIfoodOrders(db, restaurantId);
+    // módulo Logistics (o cron de 30 s já faz isto pra todos; aqui é o disparo manual)
+    const result = await syncIfoodLogistics(db, restaurantId);
     return json(result);
   } catch (e) {
     await captureError(db, 'cron', e, { endpoint: 'ifood-poll' });

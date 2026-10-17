@@ -296,3 +296,20 @@ Lido no developer.ifood.com.br (precisa de navegador logado; bloqueia robô):
   (app, merchant ID da loja de teste, contato) → sessão remota de 45–60 min
   com o analista (fluxo completo + token expirado + 429 + erros). **Reprovou =
   esperar 15 dias.** Exige CNPJ, interface de entregador, dashboard, logs.
+
+### Implementado (17/10/2026) — fluxo Logistics
+- `services/ifood-logistics.ts`: `syncIfoodLogistics` (eventos → pedido novo
+  via GET /logistics/orders, DDCR → `orders.ifood_code_required`, CAN/CON →
+  fecha; ack de todos), `pushIfoodLogisticsSteps` (etapas na ordem, guarda a
+  última em `orders.ifood_logistics_step`; 409 conta como feita),
+  `confirmIfoodLogisticsDelivery` (arrivedAtDestination + verifyDeliveryCode
+  na hora do "Entreguei"), `syncAllIfoodLogistics` (cron de 30 s, dentro do
+  dispatch-tick, travado em 1x/28 s).
+- Mapa das etapas: motoboy definido → assignDriver + goingToOrigin;
+  retirou (picked_up) → arrivedAtOrigin; saiu pra entrega (in_route) →
+  dispatch; Entreguei → arrivedAtDestination + verifyDeliveryCode.
+  O app do motoboy avisa na hora (api/deliveries) — o cron é rede de segurança.
+- 429/5xx: `ifoodFetch` repete com Retry-After/backoff; 401: renova token e
+  repete 1x. Tudo que sai fica em `integration_events` (direction outbound).
+- App do motoboy (PWA e nativo): loja com iFood vinculado → campo "Código de
+  entrega do iFood" no lugar do link externo. Migration 0056.

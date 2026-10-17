@@ -103,10 +103,13 @@ export default function DeliveryFlow({
   restaurantPhone,
   deliveries,
   route,
+  ifoodLogistics = false,
 }: {
   motoboyId: string;
   restaurantId: string | null;
   restaurantPhone?: string | null;
+  /** loja com iFood integrado (módulo Logistics): o código do cliente é conferido pelo Leeva */
+  ifoodLogistics?: boolean;
   deliveries: Delivery[];
   route?: RouteSummary;
 }) {
@@ -193,7 +196,9 @@ export default function DeliveryFlow({
 
   async function confirmDelivery(id: string) {
     const isIfood = deliveries[0]?.source === 'ifood';
+    const ifoodSite = isIfood && !ifoodLogistics;
     if (!photo || (!isIfood && code.trim().length < 4)) return;
+    if (isIfood && !ifoodSite && code.trim().length > 0 && code.trim().length < 4) return;
     setBusy(true);
     setErr(null);
     try {
@@ -375,7 +380,21 @@ export default function DeliveryFlow({
                   <button className="button ghost" type="button" disabled={busy} onClick={() => setPhoto(null)}>
                     Tirar outra
                   </button>
-                  {current.source === 'ifood' ? (
+                  {current.source === 'ifood' && ifoodLogistics ? (
+                    <>
+                      <input
+                        className="input"
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="Código de entrega do iFood (o cliente informa)"
+                        value={code}
+                        onChange={(e) => setCode(e.target.value.replace(/D/g, '').slice(0, 6))}
+                      />
+                      <div className="muted" style={{ fontSize: 12 }}>
+                        Peça ao cliente o código de entrega do iFood. O Leeva confere direto no iFood.
+                      </div>
+                    </>
+                  ) : current.source === 'ifood' ? (
                     <>
                       <div className="panel" style={{ padding: 12 }}>
                         <div className="muted" style={{ fontSize: 12 }}>Localizador do iFood</div>
@@ -414,7 +433,14 @@ export default function DeliveryFlow({
                   )}
                   <button
                     className="button"
-                    disabled={busy || (current.source === 'ifood' ? !ifoodOk : code.trim().length < 4)}
+                    disabled={
+                      busy ||
+                      (current.source === 'ifood'
+                        ? ifoodLogistics
+                          ? code.trim().length > 0 && code.trim().length < 4
+                          : !ifoodOk
+                        : code.trim().length < 4)
+                    }
                     onClick={() => confirmDelivery(current.id)}
                   >
                     {busy ? 'Confirmando…' : 'Confirmar entrega'}

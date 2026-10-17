@@ -1,6 +1,6 @@
 import { getMotoboyContextFromReq, adminDb } from '@/lib/context';
 import { json, unauthorized, forbidden, badRequest, businessError, serverError, UUID } from '@/lib/api';
-import { advanceOrderStatus, acceptDelivery, confirmDeliveryWithProof } from '@leeva/shared/services';
+import { advanceOrderStatus, acceptDelivery, confirmDeliveryWithProof, pushIfoodLogisticsSteps } from '@leeva/shared/services';
 import type { OrderStatus } from '@leeva/shared';
 
 /** Limite defensivo da foto de comprovação (base64) — ~3 MB. */
@@ -23,7 +23,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const { data: order } = await db
       .from('orders')
-      .select('id, motoboy_id')
+      .select('id, motoboy_id, restaurant_id, source')
       .eq('id', id)
       .maybeSingle();
     if (!order || order.motoboy_id !== ctx.motoboyId) {
@@ -40,8 +40,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       ifoodConfirmed?: boolean;
     };
 
+    // pedido do iFood: avisa a etapa no iFood na hora (o cron de 30 s é só a rede de segurança)
+    const notifyIfood = async () => {
+      if (order.source === 'ifood') await pushIfoodLogisticsSteps(db, order.restaurant_id, id).catch(() => 0);
+    };
+
     if (body.action === 'accept') {
       const r = await acceptDelivery(db, id, ctx.motoboyId);
+      if (r.ok) await notifyIfood();
       return r.ok ? json({ ok: true }) : businessError(r.error);
     }
 
@@ -89,6 +95,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         actorType: 'motoboy',
         actorId: ctx.motoboyId,
       });
+      if (r.ok) await notifyIfood();
       return r.ok ? json({ ok: true }) : businessError(r.error);
     }
 

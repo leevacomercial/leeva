@@ -10,6 +10,7 @@ import { MapaEntrega } from '../../components/MapaEntrega';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { StatusBadge } from '../../components/StatusBadge';
 import { usePosition } from '../../context/PositionContext';
+import { useAuth } from '../../context/AuthContext';
 import { useRide } from '../../context/RideContext';
 import type { AppStackParamList } from '../../navigation/types';
 import { useTheme } from '../../theme/ThemeContext';
@@ -65,6 +66,7 @@ export function EntregaScreen({ navigation }: Props): React.JSX.Element {
   const [photo, setPhoto] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [ifoodOk, setIfoodOk] = useState(false);
+  const { me } = useAuth();
 
   if (!activeDelivery) {
     return (
@@ -83,6 +85,11 @@ export function EntregaScreen({ navigation }: Props): React.JSX.Element {
   const acaoLabel = ACAO[d.status];
   const entregue = d.status === 'delivered';
   const isIfood = d.source === 'ifood';
+  // loja com iFood integrado: o código do cliente é conferido pelo Leeva no
+  // iFood; sem integração, o motoboy confirma no site do iFood (ifoodSite)
+  const ifoodSite = isIfood && !me?.ifoodLogistics;
+  const codeLen = isIfood ? 6 : 4;
+  const codeReady = isIfood ? code.trim().length === 0 || code.trim().length >= 4 : code.trim().length >= 4;
   const collectFromCustomer = d.paymentStatus !== 'paid' && d.paymentMethod !== 'online';
 
   function abrirMapa(): void {
@@ -135,7 +142,7 @@ export function EntregaScreen({ navigation }: Props): React.JSX.Element {
         <Text style={styles.valor}>{d.payout != null ? brl(d.payout) : '—'}</Text>
       </Card>
 
-      {isIfood && (
+      {ifoodSite && (
         <Card style={[styles.card, { borderColor: t.colors.accent }]}>
           <Text style={styles.label}>Pedido do iFood — localizador</Text>
           <Text style={styles.localizador}>{d.ifoodLocator ?? '—'}</Text>
@@ -170,7 +177,11 @@ export function EntregaScreen({ navigation }: Props): React.JSX.Element {
         {d.status === 'in_route' && (
           <View style={{ gap: t.spacing.sm }}>
             <Text style={styles.dest}>
-              {isIfood ? 'Para concluir, confirme no link do iFood, tire uma foto da entrega e marque abaixo. Você precisa estar no endereço.' : 'Para concluir, tire uma foto da entrega e peça pro cliente o código de confirmação dele. Você precisa estar no endereço.'}
+              {ifoodSite
+                ? 'Para concluir, confirme no link do iFood, tire uma foto da entrega e marque abaixo. Você precisa estar no endereço.'
+                : isIfood
+                  ? 'Para concluir, tire uma foto da entrega e digite o código de entrega do iFood que o cliente informar. Você precisa estar no endereço.'
+                  : 'Para concluir, tire uma foto da entrega e peça pro cliente o código de confirmação dele. Você precisa estar no endereço.'}
             </Text>
             {!photo ? (
               <Button
@@ -182,7 +193,7 @@ export function EntregaScreen({ navigation }: Props): React.JSX.Element {
               <>
                 <Image source={{ uri: photo }} style={styles.fotoPreview} />
                 <Button label="Tirar outra" variant="outline" onPress={() => setPhoto(null)} />
-                {isIfood ? (
+                {ifoodSite ? (
                   <Pressable style={styles.checkRow} onPress={() => setIfoodOk((v) => !v)}>
                     <Text style={styles.checkBox}>{ifoodOk ? '☑' : '☐'}</Text>
                     <Text style={styles.checkLabel}>Confirmei a entrega no link do iFood</Text>
@@ -190,21 +201,21 @@ export function EntregaScreen({ navigation }: Props): React.JSX.Element {
                 ) : (
                   <TextInput
                     style={styles.codeInput}
-                    placeholder="Código de confirmação do cliente"
+                    placeholder={isIfood ? 'Código de entrega do iFood' : 'Código de confirmação do cliente'}
                     placeholderTextColor={t.colors.textSecondary}
                     keyboardType="number-pad"
-                    maxLength={4}
+                    maxLength={codeLen}
                     value={code}
-                    onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 4))}
+                    onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, codeLen))}
                   />
                 )}
                 <Button
                   label="Confirmar entrega"
-                  disabled={isIfood ? !ifoodOk : code.trim().length < 4}
+                  disabled={ifoodSite ? !ifoodOk : !codeReady}
                   loading={advancing}
                   onPress={async () => {
                     if (!photo) return;
-                    const ok = await confirmDelivery(photo, code.trim(), isIfood ? ifoodOk : undefined);
+                    const ok = await confirmDelivery(photo, code.trim(), ifoodSite ? ifoodOk : undefined);
                     if (ok) {
                       setPhoto(null);
                       setCode('');

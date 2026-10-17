@@ -48,3 +48,4 @@ export * from './grouping-dispatch';
 export * from './route-optimizer';
 export * from './motoboy-route';
 export * from './shifts';
+export * from './ifood-logistics';

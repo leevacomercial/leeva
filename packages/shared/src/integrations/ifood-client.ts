@@ -352,3 +352,127 @@ export function putIfoodOpeningHours(token: string, merchantId: string, shifts: 
     shifts: shifts.map((s) => ({ dayOfWeek: s.dayOfWeek, start: s.start, duration: s.duration })),
   });
 }
+
+// ---------------------------------------------------------------------------
+// MÓDULO LOGISTICS — o Leeva como plataforma de logística da loja.
+// Doc: developer.ifood.com.br › Restaurante › Módulos › Logistics.
+//   eventos:  GET  /events/v1.0/events:polling?excludeHeartbeat=true  (≥ 30 s)
+//             POST /events/v1.0/events:acknowledgement {acknowledgements:[{id,status:200}]}
+//   pedido:   GET  /logistics/v1.0/orders/{id}
+//   etapas:   POST /logistics/v1.0/orders/{id}/{assignDriver|goingToOrigin|arrivedAtOrigin|dispatch|arrivedAtDestination}
+//   código:   POST /logistics/v1.0/orders/{id}/verifyDeliveryCode {code}
+// As etapas respondem 202 (o resultado chega por evento); 409 = fora de ordem
+// ou já feita.
+// ---------------------------------------------------------------------------
+
+const sleepMs = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * fetch com as regras de homologação: 429 → espera Retry-After (ou backoff
+ * exponencial 1s, 2s, 4s); 5xx/falha de rede → espera e repete. Nunca repete
+ * 4xx de negócio (400/401/403/404/409/412/422) — quem chama decide.
+ */
+async function ifoodFetch(url: string, init: RequestInit, maxRetries = 3): Promise<Response> {
+  let delay = 1000;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(url, { ...init, signal: AbortSignal.timeout(10_000) });
+      if ((res.status === 429 || res.status >= 500) && attempt < maxRetries) {
+        const ra = Number(res.headers.get('retry-after'));
+        await sleepMs(Number.isFinite(ra) && ra > 0 ? Math.min(ra, 20) * 1000 : delay);
+        delay *= 2;
+        continue;
+      }
+      return res;
+    } catch (e) {
+      if (attempt >= maxRetries) throw e;
+      await sleepMs(delay);
+      delay *= 2;
+    }
+  }
+}
+
+export type IfoodLogisticsEvent = IfoodPollEvent;
+
+/** Eventos do módulo Events (pedidos de logística). 204 = nada novo. */
+export async function pollIfoodLogisticsEvents(token: string, merchantIds?: string[]): Promise<IfoodLogisticsEvent[]> {
+  const res = await ifoodFetch(`${BASE}/events/v1.0/events:polling?excludeHeartbeat=true`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(merchantIds?.length ? { 'x-polling-merchants': merchantIds.join(',') } : {}),
+    },
+  });
+  if (res.status === 204) return [];
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw new IfoodApiError(`polling de eventos falhou (${res.status})`, res.status, json);
+  const list = Array.isArray(json) ? json : Array.isArray((json as { events?: unknown[] } | null)?.events) ? (json as { events: unknown[] }).events : [];
+  return list as IfoodLogisticsEvent[];
+}
+
+/** Confirma o recebimento (máx. 2000 por chamada). Obrigatório pra TODOS os eventos buscados. */
+export async function ackIfoodLogisticsEvents(token: string, eventIds: string[]): Promise<void> {
+  for (let i = 0; i < eventIds.length; i += 2000) {
+    const chunk = eventIds.slice(i, i + 2000);
+    const res = await ifoodFetch(`${BASE}/events/v1.0/events:acknowledgement`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acknowledgements: chunk.map((id) => ({ id, status: 200 })) }),
+    });
+    if (!res.ok && res.status !== 202) {
+      const body = await res.json().catch(() => null);
+      throw new IfoodApiError(`acknowledgement falhou (${res.status})`, res.status, body);
+    }
+  }
+}
+
+/** Detalhes do pedido de logística (cliente, endereço, pagamento, itens). */
+export async function getIfoodLogisticsOrder(token: string, orderId: string): Promise<Record<string, unknown>> {
+  const res = await ifoodFetch(`${BASE}/logistics/v1.0/orders/${orderId}`, { headers: { Authorization: `Bearer ${token}` } });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw new IfoodApiError(`buscar pedido ${orderId} falhou (${res.status})`, res.status, json);
+  return (json ?? {}) as Record<string, unknown>;
+}
+
+export type IfoodLogisticsStep = 'assignDriver' | 'goingToOrigin' | 'arrivedAtOrigin' | 'dispatch' | 'arrivedAtDestination';
+/** Ordem obrigatória das etapas. */
+export const IFOOD_LOGISTICS_STEPS: IfoodLogisticsStep[] = ['assignDriver', 'goingToOrigin', 'arrivedAtOrigin', 'dispatch', 'arrivedAtDestination'];
+
+export type IfoodVehicle = 'BICYCLE' | 'ONFOOT' | 'PATINETE' | 'EBIKE' | 'SUPERBIKE' | 'CAR' | 'MOTORCYCLE' | 'MOTORBIKE';
+
+/** Avisa uma etapa. Devolve o status HTTP (202 = aceito; 409 = já feita/fora de ordem). */
+export async function sendIfoodLogisticsStep(
+  token: string,
+  orderId: string,
+  step: IfoodLogisticsStep,
+  driver?: { name: string; phone: string; vehicle: IfoodVehicle },
+): Promise<{ status: number; body: unknown }> {
+  const res = await ifoodFetch(`${BASE}/logistics/v1.0/orders/${orderId}/${step}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body:
+      step === 'assignDriver' && driver
+        ? JSON.stringify({ workerName: driver.name.slice(0, 80), workerPhone: driver.phone.replace(/\D/g, ''), workerVehicleType: driver.vehicle })
+        : undefined,
+  });
+  const body = res.status === 202 || res.status === 204 ? null : await res.json().catch(() => null);
+  return { status: res.status, body };
+}
+
+/** Confere o código que o cliente passou. 200 {success}, 422 = código errado, 412/404 = pedido não pede código. */
+export async function verifyIfoodDeliveryCode(token: string, orderId: string, code: string): Promise<{ status: number; success: boolean; body: unknown }> {
+  const res = await ifoodFetch(`${BASE}/logistics/v1.0/orders/${orderId}/verifyDeliveryCode`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: code.replace(/\D/g, '') }),
+  });
+  const body = await res.json().catch(() => null);
+  return { status: res.status, success: res.ok && (body as { success?: boolean } | null)?.success !== false, body };
+}
+
+/** Pedido novo / cancelado / concluído / pede código (fullCode ou code curto). */
+export const IFOOD_LOGISTICS_EVENT = {
+  isNewOrder: (e: IfoodPollEvent) => ['PLC', 'PLACED', 'ORDER_CREATED', 'CFM', 'CONFIRMED'].includes(e.fullCode ?? e.code) || ['PLC', 'CFM'].includes(e.code),
+  isCancelled: (e: IfoodPollEvent) => e.code === 'CAN' || e.fullCode === 'CANCELLED',
+  isConcluded: (e: IfoodPollEvent) => e.code === 'CON' || e.fullCode === 'CONCLUDED',
+  isCodeRequested: (e: IfoodPollEvent) => e.code === 'DDCR' || e.fullCode === 'DELIVERY_DROP_CODE_REQUESTED',
+};

@@ -104,3 +104,79 @@ export class IFoodOrderProvider implements OrderProvider {
     return { ok: false, error: 'iFood pushStatus: ainda não ligado (precisa do restaurantId — ver comentário no código)' };
   }
 }
+
+/**
+ * Pedido do módulo LOGISTICS (GET /logistics/v1.0/orders/{id}) → formato do
+ * Leeva. O valor que o motoboy recebe do cliente é `payments.pending`
+ * (o resto já foi pago no iFood). O localizador vem em customer.phone.localizer.
+ */
+export function logisticsOrderToNormalized(raw: Record<string, unknown>): ProviderResult {
+  type Money = { value?: number; method?: string; type?: string; card?: { brand?: string } };
+  const p = raw as {
+    id?: string;
+    displayId?: string;
+    createdAt?: string;
+    customer?: { name?: string; phone?: { number?: string; localizer?: string } };
+    items?: { name?: string; quantity?: number; unitPrice?: number; observations?: string }[];
+    payments?: { prepaid?: number; pending?: number; methods?: Money[] };
+    delivery?: {
+      observations?: string;
+      deliveryAddress?: {
+        formattedAddress?: string;
+        streetName?: string;
+        streetNumber?: string;
+        complement?: string;
+        reference?: string;
+        neighborhood?: string;
+        city?: string;
+        state?: string;
+        postalCode?: string;
+        coordinates?: { latitude?: number; longitude?: number };
+      };
+    };
+  };
+  if (!p?.id) return { ok: false, error: 'pedido de logística do iFood sem id' };
+  const a = p.delivery?.deliveryAddress ?? {};
+  const line =
+    a.formattedAddress?.trim() ||
+    [[a.streetName, a.streetNumber].filter(Boolean).join(', '), a.neighborhood, a.city, a.state].filter(Boolean).join(', ');
+  const pending = Number(p.payments?.pending ?? 0);
+  const method = (p.payments?.methods?.find((m) => m.method)?.method ?? '').toUpperCase();
+  const paymentMethod: NormalizedOrder['paymentMethod'] =
+    pending <= 0 ? 'online' : method === 'CASH' ? 'cash' : method === 'PIX' ? 'pix' : /CREDIT|DEBIT|MEAL|FOOD|CARD/.test(method) ? 'card_on_delivery' : 'other';
+  const localizer = p.customer?.phone?.localizer?.replace(/\D/g, '') || null;
+  const notes = [
+    p.displayId ? `iFood #${p.displayId}` : null,
+    a.complement ? `Compl.: ${a.complement}` : null,
+    a.reference ? `Ref.: ${a.reference}` : null,
+    p.delivery?.observations,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return {
+    ok: true,
+    order: {
+      externalId: p.id,
+      source: 'ifood',
+      ifoodLocator: localizer,
+      eventId: p.id,
+      customer: { name: p.customer?.name ?? 'Cliente iFood', phone: p.customer?.phone?.number ?? null },
+      items: (p.items ?? [])
+        .filter((i) => i.name)
+        .map((i) => ({ name: i.name!, quantity: i.quantity ?? 1, unitPrice: i.unitPrice ?? 0, notes: i.observations })),
+      address: {
+        formatted: line || 'Endereço não informado',
+        latitude: a.coordinates?.latitude ?? null,
+        longitude: a.coordinates?.longitude ?? null,
+        region: a.neighborhood ?? null,
+      },
+      total: pending > 0 ? pending : 0,
+      deliveryFee: 0,
+      paymentMethod,
+      paymentStatus: pending > 0 ? 'pending' : 'paid',
+      notes: notes || null,
+      createdAt: p.createdAt,
+      raw,
+    },
+  };
+}

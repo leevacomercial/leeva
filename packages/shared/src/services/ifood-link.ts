@@ -277,11 +277,20 @@ export class IfoodNotLinkedError extends Error {
  * quando expirado. Lança `IfoodNotLinkedError` se o restaurante nunca
  * vinculou (chamador decide como tratar).
  */
-export async function getValidIfoodAccessToken(db: DB, restaurantId: string): Promise<{ token: string; merchantIds: string[] }> {
+/**
+ * Token válido do restaurante. Renova perto de expirar (5 min de folga) e,
+ * com `force`, renova na hora — usado quando o iFood responde 401.
+ */
+export async function getValidIfoodAccessToken(
+  db: DB,
+  restaurantId: string,
+  opts: { force?: boolean } = {},
+): Promise<{ token: string; merchantIds: string[] }> {
   const c = await getConfig(db, restaurantId);
   if (c.linkStatus !== 'linked') throw new IfoodNotLinkedError();
 
-  const stillValid = c.accessTokenEnc && c.accessTokenExpiresAt && new Date(c.accessTokenExpiresAt).getTime() > Date.now() + 30_000;
+  const stillValid =
+    !opts.force && c.accessTokenEnc && c.accessTokenExpiresAt && new Date(c.accessTokenExpiresAt).getTime() > Date.now() + 5 * 60_000;
   if (stillValid) {
     return { token: await decryptSecret(c.accessTokenEnc!), merchantIds: c.merchantIds ?? [] };
   }

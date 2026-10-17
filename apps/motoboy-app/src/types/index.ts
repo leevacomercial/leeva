@@ -38,6 +38,8 @@ export interface MotoboyMe {
   city: string | null;
   avatarUrl?: string | null;
   pushEnabled: boolean;
+  /** loja com iFood integrado (módulo Logistics): código do iFood digitado no app */
+  ifoodLogistics?: boolean;
   terms: { version: number; content: string } | null;
 }
 

@@ -17,6 +17,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../types/database';
 import { haversineKm } from './geo';
 import { advanceOrderStatus } from './orders';
+import { isIfoodLogisticsLinked, confirmIfoodLogisticsDelivery } from './ifood-logistics';
 
 type DB = SupabaseClient<Database>;
 
@@ -47,7 +48,7 @@ export async function confirmDeliveryWithProof(
 ): Promise<ConfirmDeliveryResult> {
   const { data: order } = await db
     .from('orders')
-    .select('id, motoboy_id, status, latitude, longitude, delivery_confirmation_code, source')
+    .select('id, restaurant_id, motoboy_id, status, latitude, longitude, delivery_confirmation_code, source')
     .eq('id', input.orderId)
     .maybeSingle();
   if (!order || order.motoboy_id !== input.motoboyId) {
@@ -57,11 +58,14 @@ export async function confirmDeliveryWithProof(
     return { ok: false, error: 'a entrega não está em rota', code: 'invalid_state' };
   }
 
-  // Pedido do iFood: quem valida é o iFood (localizador + código do cliente no
-  // link deles). Sem a integração oficial o Leeva não confere isso — exige o
-  // motoboy declarar que confirmou lá; foto e GPS continuam valendo.
+  // Pedido do iFood: quem valida é o iFood.
+  //  - integração (módulo Logistics) ligada: o motoboy digita no app o código
+  //    que o cliente passa e o Leeva confere no iFood (verifyDeliveryCode);
+  //  - sem integração: o motoboy confirma no link do iFood e declara aqui.
+  //  Foto e GPS continuam valendo nos dois casos.
   const isIfood = order.source === 'ifood';
-  if (isIfood && !input.ifoodConfirmed) {
+  const ifoodLogistics = isIfood && (await isIfoodLogisticsLinked(db, order.restaurant_id));
+  if (isIfood && !ifoodLogistics && !input.ifoodConfirmed) {
     return { ok: false, error: 'Confirme a entrega no link do iFood e marque "Confirmei no iFood".', code: 'wrong_code' };
   }
   const expectedCode = isIfood ? null : (order.delivery_confirmation_code as string | null);
@@ -102,6 +106,11 @@ export async function confirmDeliveryWithProof(
       code: 'too_far',
       distanceM: distanceM ?? undefined,
     };
+  }
+
+  if (ifoodLogistics) {
+    const v = await confirmIfoodLogisticsDelivery(db, order.restaurant_id, order.id, input.confirmationCode);
+    if (!v.ok) return { ok: false, error: v.error, code: 'wrong_code' };
   }
 
   await db

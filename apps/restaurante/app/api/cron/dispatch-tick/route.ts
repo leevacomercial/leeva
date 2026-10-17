@@ -1,6 +1,6 @@
 import { adminDb } from '@/lib/context';
 import { json, serverError } from '@/lib/api';
-import { dispatchTick, recomputeAllReliability, captureError, checkRateLimit } from '@leeva/shared/services';
+import { dispatchTick, recomputeAllReliability, captureError, checkRateLimit, syncAllIfoodLogistics } from '@leeva/shared/services';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -39,7 +39,18 @@ export async function POST(req: Request) {
       reputation = await recomputeAllReliability(db).catch(() => undefined);
     }
 
-    return json({ ok: true, ...result, reputation });
+    // iFood (módulo Logistics): eventos + etapas, no máx. 1x a cada ~28 s
+    // (o iFood exige polling com intervalo mínimo de 30 s)
+    let ifood: Awaited<ReturnType<typeof syncAllIfoodLogistics>> | undefined;
+    const ifoodSlot = await checkRateLimit(db, 'default', 'cron:ifood-logistics', { limit: 1, windowSeconds: 28 });
+    if (ifoodSlot.allowed) {
+      ifood = await syncAllIfoodLogistics(db).catch(async (e) => {
+        await captureError(db, 'cron', e, { endpoint: 'ifood-logistics' });
+        return undefined;
+      });
+    }
+
+    return json({ ok: true, ...result, reputation, ifood });
   } catch (e) {
     await captureError(db, 'cron', e, { endpoint: 'dispatch-tick' });
     return serverError(e);

@@ -1,5 +1,5 @@
 import { requireMotoboyContext, adminDb } from '@/lib/context';
-import { getMotoboyRoute, sortByRoute } from '@leeva/shared/services';
+import { getMotoboyRoute, sortByRoute, isIfoodLogisticsLinked } from '@leeva/shared/services';
 import DeliveryFlow from './DeliveryFlow';
 
 export const dynamic = 'force-dynamic';
@@ -49,6 +49,7 @@ export default async function EntregaPage() {
       motoboyId={ctx.motoboyId}
       restaurantId={ctx.restaurantId}
       restaurantPhone={rst?.phone ?? null}
+      ifoodLogistics={ctx.restaurantId ? await isIfoodLogisticsLinked(db, ctx.restaurantId) : false}
       deliveries={JSON.parse(JSON.stringify(deliveries))}
       route={{ navigationUrl: route.navigationUrl, totalKm: route.totalKm, lateMinutes: route.lateMinutes }}
     />
