@@ -112,7 +112,7 @@ export function IfoodLink() {
         </div>
       )}
 
-      {status.linkStatus === 'not_linked' && showCentralForm && (
+      {status.linkStatus !== 'linked' && showCentralForm && (
         <div style={{ marginTop: 10 }}>
           <p className="muted" style={{ fontSize: 12 }}>
             Cole o Client ID e o Client Secret do app tipo <b>Centralizado</b> que você criou no
@@ -143,7 +143,7 @@ export function IfoodLink() {
         </div>
       )}
 
-      {status.linkStatus === 'pending' && (
+      {status.linkStatus === 'pending' && !showCentralForm && (
         <div style={{ marginTop: 10 }}>
           <div className="op-alert info">
             <div style={{ fontWeight: 700, fontSize: 20, letterSpacing: '0.05em' }}>{status.userCode}</div>
@@ -166,6 +166,9 @@ export function IfoodLink() {
             <button className="button secondary" style={{ width: 'auto' }} disabled={busy} onClick={() => act('unlink')}>
               Cancelar
             </button>
+            <button className="button secondary" style={{ width: 'auto' }} disabled={busy} onClick={() => setShowCentralForm(true)}>
+              Usar um app Centralizado
+            </button>
           </div>
         </div>
       )}
@@ -186,9 +189,16 @@ export function IfoodLink() {
       {status.linkStatus === 'error' && (
         <div style={{ marginTop: 10 }}>
           <div className="op-alert critical">{status.lastError ?? 'Falha no vínculo.'}</div>
-          <button className="button" style={{ width: 'auto', marginTop: 10 }} disabled={busy} onClick={() => act('start')}>
-            {busy ? '…' : 'Tentar de novo'}
-          </button>
+          <div className="row" style={{ marginTop: 10, gap: 8 }}>
+            <button className="button" style={{ width: 'auto' }} disabled={busy} onClick={() => act('start')}>
+              {busy ? '…' : 'Tentar de novo'}
+            </button>
+            {!showCentralForm && (
+              <button className="button secondary" style={{ width: 'auto' }} disabled={busy} onClick={() => setShowCentralForm(true)}>
+                Usar um app Centralizado
+              </button>
+            )}
+          </div>
         </div>
       )}
     </section>
